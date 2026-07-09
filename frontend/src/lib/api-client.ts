@@ -87,6 +87,176 @@ export interface UsageStats {
   chunks_total: number;
 }
 
+export type WorkspaceRole = "owner" | "editor" | "viewer";
+
+export interface Member {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: WorkspaceRole;
+}
+
+export interface Invitation {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: WorkspaceRole;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  accepted_at?: string | null;
+}
+
+export interface ApiKey {
+  id: string;
+  workspace_id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  last_used_at?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  secret?: string | null;
+}
+
+export interface Collection {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+  document_count: number;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  link_url?: string | null;
+  read_at?: string | null;
+  created_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id?: string | null;
+  workspace_id?: string | null;
+  action: string;
+  resource_type: string;
+  resource_id?: string | null;
+  details?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface IngestionJob {
+  id: string;
+  document_id: string;
+  status: string;
+  stage: string;
+  error_message?: string | null;
+  retry_count: number;
+  created_at: string;
+  finished_at?: string | null;
+}
+
+export interface DocumentVersion {
+  id: string;
+  document_id: string;
+  version_number: number;
+  is_active: boolean;
+  file_size: number;
+  content_hash?: string | null;
+  change_note?: string | null;
+  created_at: string;
+}
+
+export interface Entity {
+  id: string;
+  workspace_id: string;
+  name: string;
+  entity_type: string;
+  normalized_name: string;
+}
+
+export interface Plan {
+  id: string;
+  code: PlanTier;
+  name: string;
+  description?: string | null;
+  price_cents_monthly: number;
+  queries_per_day: number;
+  documents_limit: number;
+  workspaces_limit: number;
+  storage_bytes_limit: number;
+  seats_limit: number;
+}
+
+export interface Invoice {
+  id: string;
+  stripe_invoice_id: string;
+  status: string;
+  amount_due_cents: number;
+  amount_paid_cents: number;
+  currency: string;
+  hosted_invoice_url?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+}
+
+export interface SharedLink {
+  id: string;
+  workspace_id: string;
+  resource_type: string;
+  resource_id: string;
+  expires_at?: string | null;
+  view_count: number;
+  allow_download: boolean;
+  created_at: string;
+  token?: string | null;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  workspace_id: string;
+  url: string;
+  event_types: string[];
+  is_active: boolean;
+  description?: string | null;
+  created_at: string;
+}
+
+export interface RetentionPolicy {
+  id: string;
+  workspace_id: string;
+  resource_type: string;
+  retain_days: number;
+  hard_delete: boolean;
+  is_active: boolean;
+}
+
+export interface ExportJob {
+  id: string;
+  job_type: string;
+  status: string;
+  download_url?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface SsoConnection {
+  id: string;
+  workspace_id: string;
+  provider: string;
+  issuer_url?: string | null;
+  client_id?: string | null;
+  domains: string[];
+  is_enforced: boolean;
+  is_active: boolean;
+}
+
 class ApiError extends Error {
   status: number;
   code?: string;
@@ -214,6 +384,204 @@ export const api = {
     request<{ url: string; mock?: boolean }>("/billing/checkout", {
       method: "POST",
       body: JSON.stringify({ plan }),
+    }),
+  listPlans: () => request<Plan[]>("/billing/plans"),
+  listInvoices: () => request<Invoice[]>("/billing/invoices"),
+
+  // Members & invitations
+  listMembers: (workspaceId: string) =>
+    request<Member[]>(`/workspaces/${workspaceId}/members`),
+  inviteMember: (workspaceId: string, body: { email: string; role: WorkspaceRole }) =>
+    request<Member | Invitation>(`/workspaces/${workspaceId}/members`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateMemberRole: (workspaceId: string, userId: string, role: WorkspaceRole) =>
+    request<Member>(`/workspaces/${workspaceId}/members/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+  removeMember: (workspaceId: string, userId: string) =>
+    request<{ ok: boolean }>(`/workspaces/${workspaceId}/members/${userId}`, {
+      method: "DELETE",
+    }),
+  listInvitations: (workspaceId: string) =>
+    request<Invitation[]>(`/workspaces/${workspaceId}/invitations`),
+  createInvitation: (
+    workspaceId: string,
+    body: { email: string; role: WorkspaceRole },
+  ) =>
+    request<Invitation>(`/workspaces/${workspaceId}/invitations`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  revokeInvitation: (workspaceId: string, invitationId: string) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/invitations/${invitationId}`,
+      { method: "DELETE" },
+    ),
+
+  // API keys
+  listApiKeys: (workspaceId: string) =>
+    request<ApiKey[]>(`/workspaces/${workspaceId}/api-keys`),
+  createApiKey: (
+    workspaceId: string,
+    body: { name: string; scopes?: string[] },
+  ) =>
+    request<ApiKey>(`/workspaces/${workspaceId}/api-keys`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  revokeApiKey: (workspaceId: string, keyId: string) =>
+    request<{ ok: boolean }>(`/workspaces/${workspaceId}/api-keys/${keyId}`, {
+      method: "DELETE",
+    }),
+
+  // Document extras
+  documentStatus: (workspaceId: string, documentId: string) =>
+    request<IngestionJob>(
+      `/workspaces/${workspaceId}/documents/${documentId}/status`,
+    ),
+  documentVersions: (workspaceId: string, documentId: string) =>
+    request<DocumentVersion[]>(
+      `/workspaces/${workspaceId}/documents/${documentId}/versions`,
+    ),
+  documentEntities: (workspaceId: string, documentId: string) =>
+    request<Entity[]>(
+      `/workspaces/${workspaceId}/documents/${documentId}/entities`,
+    ),
+  reprocessDocument: (workspaceId: string, documentId: string) =>
+    request<Document>(
+      `/workspaces/${workspaceId}/documents/${documentId}/reprocess`,
+      { method: "POST" },
+    ),
+
+  // Collections
+  listCollections: (workspaceId: string) =>
+    request<Collection[]>(`/workspaces/${workspaceId}/collections`),
+  createCollection: (
+    workspaceId: string,
+    body: { name: string; description?: string; document_ids?: string[] },
+  ) =>
+    request<Collection>(`/workspaces/${workspaceId}/collections`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  addToCollection: (
+    workspaceId: string,
+    collectionId: string,
+    documentId: string,
+  ) =>
+    request<Collection>(
+      `/workspaces/${workspaceId}/collections/${collectionId}/documents`,
+      { method: "POST", body: JSON.stringify({ document_id: documentId }) },
+    ),
+  removeFromCollection: (
+    workspaceId: string,
+    collectionId: string,
+    documentId: string,
+  ) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/collections/${collectionId}/documents/${documentId}`,
+      { method: "DELETE" },
+    ),
+
+  // Notifications
+  listNotifications: (unreadOnly = false) =>
+    request<Notification[]>(
+      `/notifications?unread_only=${unreadOnly ? "true" : "false"}`,
+    ),
+  markNotificationRead: (id: string) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllNotificationsRead: () =>
+    request<{ ok: boolean; marked: number }>("/notifications/read-all", {
+      method: "POST",
+    }),
+
+  // Audit
+  listAuditLogs: (workspaceId: string) =>
+    request<AuditLog[]>(`/workspaces/${workspaceId}/audit-logs`),
+
+  // Shared links & webhooks
+  listSharedLinks: (workspaceId: string) =>
+    request<SharedLink[]>(`/workspaces/${workspaceId}/shared-links`),
+  createSharedLink: (
+    workspaceId: string,
+    body: {
+      resource_type: "thread" | "document" | "collection";
+      resource_id: string;
+      expires_at?: string;
+      allow_download?: boolean;
+    },
+  ) =>
+    request<SharedLink>(`/workspaces/${workspaceId}/shared-links`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  revokeSharedLink: (workspaceId: string, linkId: string) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/shared-links/${linkId}`,
+      { method: "DELETE" },
+    ),
+  listWebhooks: (workspaceId: string) =>
+    request<WebhookEndpoint[]>(`/workspaces/${workspaceId}/webhooks`),
+  createWebhook: (
+    workspaceId: string,
+    body: { url: string; event_types: string[]; description?: string },
+  ) =>
+    request<WebhookEndpoint>(`/workspaces/${workspaceId}/webhooks`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteWebhook: (workspaceId: string, endpointId: string) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/webhooks/${endpointId}`,
+      { method: "DELETE" },
+    ),
+
+  // Compliance
+  listRetentionPolicies: (workspaceId: string) =>
+    request<RetentionPolicy[]>(
+      `/workspaces/${workspaceId}/retention-policies`,
+    ),
+  upsertRetentionPolicy: (
+    workspaceId: string,
+    body: {
+      resource_type: string;
+      retain_days: number;
+      hard_delete?: boolean;
+      notes?: string;
+    },
+  ) =>
+    request<RetentionPolicy>(`/workspaces/${workspaceId}/retention-policies`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  createExportJob: (body: {
+    job_type?: "gdpr_user_export" | "workspace_export";
+    workspace_id?: string;
+  }) =>
+    request<ExportJob>("/exports", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  listExportJobs: () => request<ExportJob[]>("/exports"),
+  listSsoConnections: (workspaceId: string) =>
+    request<SsoConnection[]>(`/workspaces/${workspaceId}/sso`),
+  upsertSsoConnection: (
+    workspaceId: string,
+    body: {
+      provider: string;
+      issuer_url?: string;
+      client_id?: string;
+      client_secret?: string;
+      domains?: string[];
+      is_enforced?: boolean;
+    },
+  ) =>
+    request<SsoConnection>(`/workspaces/${workspaceId}/sso`, {
+      method: "PUT",
+      body: JSON.stringify(body),
     }),
 };
 
