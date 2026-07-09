@@ -186,3 +186,7 @@ class HealthResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: dict[str, Any]
+
+
+# Re-export extended schemas for convenience
+from app.models.schemas.extended import *  # noqa: E402, F401, F403

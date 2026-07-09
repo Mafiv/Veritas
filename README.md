@@ -110,7 +110,12 @@ npm run build
 backend/app/          FastAPI app, services, tasks
 frontend/src/app/     Next.js routes (landing, auth, dashboard)
 docker-compose.yml    db, redis, api, worker, frontend
+docs/SCHEMA.md        PostgreSQL 3NF schema (40 tables) + Alembic guide
 ```
+
+## Database schema
+
+See [`docs/SCHEMA.md`](docs/SCHEMA.md) for the full 40-table ERD, soft-delete policy, and domain migrations (`alembic upgrade head`).
 
 ## License
 
