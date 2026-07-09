@@ -1,14 +1,14 @@
-"""Webhook HTTP delivery + usage meter rollup + retention purge tasks."""
+"""Webhook HTTP delivery + usage meter rollup + retention purge + pgvector backfill."""
 
 from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.tasks.celery_app import celery_app
 
@@ -29,15 +29,23 @@ def deliver_pending_webhooks(limit: int = 50) -> dict:
 
 
 async def _deliver_pending(limit: int) -> dict:
+    from app.core.config import get_settings
     from app.db.session import AsyncSessionLocal
     from app.models.domain import WebhookDelivery, WebhookDeliveryStatus, WebhookEndpoint
+    from app.services.enterprise.service import schedule_retry, sign_payload, webhook_signing_secret
 
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
     sent = 0
     failed = 0
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(WebhookDelivery)
             .where(WebhookDelivery.status == WebhookDeliveryStatus.PENDING)
+            .where(
+                (WebhookDelivery.next_retry_at.is_(None))
+                | (WebhookDelivery.next_retry_at <= now)
+            )
             .order_by(WebhookDelivery.created_at.asc())
             .limit(limit)
         )
@@ -54,6 +62,8 @@ async def _deliver_pending(limit: int) -> dict:
                 {"event": d.event_type, "payload": d.payload, "delivery_id": str(d.id)}
             ).encode()
             try:
+                secret = webhook_signing_secret(ep)
+                signature = sign_payload(secret, body)
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     resp = await client.post(
                         ep.url,
@@ -62,6 +72,7 @@ async def _deliver_pending(limit: int) -> dict:
                             "Content-Type": "application/json",
                             "X-Veritas-Event": d.event_type,
                             "X-Veritas-Delivery": str(d.id),
+                            "X-Veritas-Signature": f"sha256={signature}",
                         },
                     )
                 d.http_status = resp.status_code
@@ -70,28 +81,33 @@ async def _deliver_pending(limit: int) -> dict:
                 if 200 <= resp.status_code < 300:
                     d.status = WebhookDeliveryStatus.SUCCESS
                     d.delivered_at = datetime.now(timezone.utc)
+                    d.next_retry_at = None
                     sent += 1
                 else:
-                    d.status = WebhookDeliveryStatus.FAILED
-                    failed += 1
+                    schedule_retry(d)
+                    if d.status == WebhookDeliveryStatus.FAILED:
+                        failed += 1
             except Exception as exc:  # noqa: BLE001
-                d.status = WebhookDeliveryStatus.FAILED
-                d.response_body = str(exc)[:2000]
                 d.attempt_count = (d.attempt_count or 0) + 1
-                failed += 1
+                d.response_body = str(exc)[:2000]
+                schedule_retry(d)
+                if d.status == WebhookDeliveryStatus.FAILED:
+                    failed += 1
         await session.commit()
-    return {"sent": sent, "failed": failed, "processed": sent + failed}
+    return {
+        "sent": sent,
+        "failed": failed,
+        "processed": len(deliveries),
+        "max_attempts": settings.webhook_max_attempts,
+    }
 
 
 @celery_app.task(name="app.tasks.webhook_tasks.rollup_usage_meters")
 def rollup_usage_meters() -> dict:
-    """Ensure daily meters exist for workspaces with recent usage events."""
     return _run(_rollup_meters())
 
 
 async def _rollup_meters() -> dict:
-    from datetime import timedelta
-
     from app.db.session import AsyncSessionLocal
     from app.models.domain import UsageEvent, UsageMeter
 
@@ -106,7 +122,6 @@ async def _rollup_meters() -> dict:
                 )
             )
         ).scalars().all()
-        # Rebuild today's query meters from events (idempotent-ish: set absolute)
         totals: dict[tuple, int] = {}
         for e in events:
             key = (e.workspace_id, e.event_type if e.event_type != "query" else "query")
@@ -177,3 +192,18 @@ async def _run_export(job_id: UUID) -> dict:
         job = await run_export_job(session, job_id)
         await session.commit()
         return {"job_id": str(job.id), "status": job.status.value}
+
+
+@celery_app.task(name="app.tasks.webhook_tasks.backfill_pgvector")
+def backfill_pgvector(limit: int = 500) -> dict:
+    return _run(_backfill(limit))
+
+
+async def _backfill(limit: int) -> dict:
+    from app.db.session import AsyncSessionLocal
+    from app.services.retrieval.pgvector import backfill_embedding_vecs
+
+    async with AsyncSessionLocal() as session:
+        n = await backfill_embedding_vecs(session, limit=limit)
+        await session.commit()
+    return {"backfilled": n}

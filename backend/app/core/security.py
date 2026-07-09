@@ -1,9 +1,14 @@
-"""JWT auth, password hashing, and role helpers."""
+"""JWT auth, password hashing, secret encryption, and role helpers."""
 
+from __future__ import annotations
+
+import base64
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
+from cryptography.fernet import Fernet, InvalidToken
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -18,6 +23,26 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
+
+
+def _fernet() -> Fernet:
+    """Derive a stable Fernet key from SECRET_KEY."""
+    digest = hashlib.sha256(get_settings().secret_key.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def encrypt_secret(plaintext: str) -> str:
+    return _fernet().encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_secret(ciphertext: str) -> str:
+    # Backward-compat for earlier "enc:" placeholder storage
+    if ciphertext.startswith("enc:"):
+        return ciphertext[4:]
+    try:
+        return _fernet().decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise ValueError("Unable to decrypt secret") from exc
 
 
 def create_access_token(subject: str | UUID, extra: dict[str, Any] | None = None) -> str:

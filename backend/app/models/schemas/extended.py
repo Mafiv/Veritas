@@ -266,6 +266,13 @@ class NotificationPreferenceUpdate(BaseModel):
     enabled: bool
 
 
+class NotificationPreferenceOut(BaseModel):
+    id: UUID
+    event_type: str
+    channel: str
+    enabled: bool
+
+
 # ── Enterprise ────────────────────────────────────────────────────────────────
 
 
@@ -292,6 +299,8 @@ class SsoConnectionCreate(BaseModel):
     client_secret: Optional[str] = None
     domains: list[str] = Field(default_factory=list)
     is_enforced: bool = False
+    metadata_xml: Optional[str] = None
+    is_active: bool = True
 
 
 class SsoConnectionOut(ORMModel):
@@ -303,6 +312,7 @@ class SsoConnectionOut(ORMModel):
     domains: list[str]
     is_enforced: bool
     is_active: bool
+    metadata_xml: Optional[str] = None
 
 
 class DataRetentionPolicyUpsert(BaseModel):

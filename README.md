@@ -110,11 +110,19 @@ Opinionated **archival ink + signal teal** identity — Space Grotesk (display) 
 | POST | `/api/v1/workspaces/{id}/shared-links` | Expiring share links |
 | POST | `/api/v1/workspaces/{id}/webhooks` | Outbound webhooks (owner) |
 | PUT | `/api/v1/workspaces/{id}/sso` | SSO connection config (owner) |
+| DELETE | `/api/v1/workspaces/{id}/sso/{provider}` | Soft-delete SSO connection |
+| GET | `/api/v1/auth/sso/discover` | Discover SSO for email domain |
+| POST | `/api/v1/auth/sso/start` | Start OIDC/SAML authorize redirect |
+| GET | `/api/v1/auth/sso/oidc/callback` | OIDC callback → frontend tokens |
+| POST | `/api/v1/auth/sso/saml/acs` | SAML ACS |
+| GET/PUT | `/api/v1/notifications/preferences` | Notification channel preferences |
+| GET | `/api/v1/workspaces/{id}/webhooks/{ep}/deliveries` | Webhook delivery log |
 | PUT | `/api/v1/workspaces/{id}/retention-policies` | Retention policy upsert |
 | POST | `/api/v1/exports` | GDPR / workspace export job |
 | GET | `/health/retrieval` | Retrieval / pgvector introspection |
 
-Product phases (schema → services → UI → jobs → retrieval → compliance → hardening) are documented in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Product phases and Domain 7/SSO/pgvector notes: [`docs/ROADMAP.md`](docs/ROADMAP.md).  
+Schema: [`docs/SCHEMA.md`](docs/SCHEMA.md). Apply `alembic upgrade head` for migration `008_pgvector`.
 
 ## Tests
 

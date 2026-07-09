@@ -497,3 +497,34 @@ async def remove_collection_document(
         db, collection_id=collection_id, document_id=document_id
     )
     return {"ok": True}
+
+
+@router.delete("/workspaces/{workspace_id}/collections/{collection_id}")
+async def delete_collection(
+    workspace_id: UUID,
+    collection_id: UUID,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireEditor,
+) -> dict:
+    await doc_service.soft_delete_collection(
+        db, collection_id=collection_id, workspace_id=workspace_id
+    )
+    return {"ok": True}
+
+
+@router.get(
+    "/workspaces/{workspace_id}/collections/{collection_id}/documents",
+    response_model=list[UUID],
+)
+async def list_collection_documents(
+    workspace_id: UUID,
+    collection_id: UUID,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireViewer,
+) -> list[UUID]:
+    col = await doc_service.get_collection(db, collection_id)
+    if not col or col.workspace_id != workspace_id:
+        raise NotFoundError("Collection not found")
+    return await doc_service.list_collection_document_ids(db, collection_id)

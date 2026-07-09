@@ -213,8 +213,16 @@ async def _resolve_document_scope(
     role: WorkspaceRole,
     thread_id: UUID | None,
     document_ids: list[UUID] | None,
+    collection_id: UUID | None = None,
 ) -> list[UUID] | None:
     scoped = document_ids
+    if collection_id and not scoped:
+        from app.services.documents import service as docs
+
+        col = await docs.get_collection(db, collection_id)
+        if not col or col.workspace_id != workspace_id:
+            raise NotFoundError("Collection not found")
+        scoped = await docs.list_collection_document_ids(db, collection_id)
     if thread_id and not scoped:
         scoped = await chat_service.get_thread_document_ids(db, thread_id) or None
     return await doc_service.readable_document_ids(
@@ -248,6 +256,7 @@ async def chat_query(
         role=member.role,
         thread_id=thread.id,
         document_ids=body.document_ids,
+        collection_id=body.collection_id,
     )
 
     user_msg = ChatMessage(thread_id=thread.id, role=MessageRole.USER, content=body.question)
@@ -333,6 +342,7 @@ async def chat_stream(
         role=member.role,
         thread_id=thread.id,
         document_ids=body.document_ids,
+        collection_id=body.collection_id,
     )
 
     user_msg = ChatMessage(thread_id=thread.id, role=MessageRole.USER, content=body.question)

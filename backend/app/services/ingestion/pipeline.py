@@ -111,21 +111,24 @@ class IngestionService:
             await db.flush()
 
             for chunk, emb in zip(chunks, embeddings):
-                db.add(
-                    DocumentChunk(
-                        document_id=doc.id,
-                        document_version_id=version.id,
-                        workspace_id=doc.workspace_id,
-                        chunk_index=chunk.chunk_index,
-                        content=chunk.content,
-                        token_count=chunk.token_count,
-                        page_number=chunk.page_number,
-                        heading=chunk.heading,
-                        embedding=emb,
-                        embedding_model_id=emb_model.id if emb_model else None,
-                        meta=chunk.meta,
-                    )
+                row = DocumentChunk(
+                    document_id=doc.id,
+                    document_version_id=version.id,
+                    workspace_id=doc.workspace_id,
+                    chunk_index=chunk.chunk_index,
+                    content=chunk.content,
+                    token_count=chunk.token_count,
+                    page_number=chunk.page_number,
+                    heading=chunk.heading,
+                    embedding=emb,
+                    embedding_model_id=emb_model.id if emb_model else None,
+                    meta=chunk.meta,
                 )
+                db.add(row)
+                await db.flush()
+                from app.services.retrieval.pgvector import write_embedding_vec
+
+                await write_embedding_vec(db, chunk_id=row.id, embedding=emb)
 
             doc.page_count = parsed.page_count
             doc.chunk_count = len(chunks)
@@ -227,6 +230,18 @@ class IngestionService:
                 body=f"{doc.original_filename} failed to index: {str(exc)[:200]}",
                 link_url="/documents",
                 meta={"document_id": str(doc.id)},
+            )
+            from app.services.enterprise.service import enqueue_webhook_deliveries
+
+            await enqueue_webhook_deliveries(
+                db,
+                workspace_id=doc.workspace_id,
+                event_type="document.failed",
+                payload={
+                    "document_id": str(doc.id),
+                    "filename": doc.original_filename,
+                    "error": str(exc)[:500],
+                },
             )
             raise
 

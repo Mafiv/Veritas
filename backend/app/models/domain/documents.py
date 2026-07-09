@@ -35,6 +35,11 @@ from app.models.domain.base import (
     new_uuid,
 )
 
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:  # pragma: no cover
+    Vector = None  # type: ignore
+
 if TYPE_CHECKING:
     from app.models.domain.identity import User, Workspace
 
@@ -173,8 +178,12 @@ class DocumentChunk(Base, TimestampMixin):
     token_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     heading: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    # Embedding as JSON for portability; pgvector upgrade is a later migration.
+    # Embedding as JSON for portability; embedding_vec is native pgvector (migration 008).
     embedding: Mapped[Optional[list]] = mapped_column(JSONType, nullable=True)
+    embedding_vec: Mapped[Optional[list]] = mapped_column(
+        Vector(1536) if Vector is not None else JSONType,
+        nullable=True,
+    )
     embedding_model_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("embedding_models.id", ondelete="SET NULL"), nullable=True, index=True
     )

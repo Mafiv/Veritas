@@ -15,9 +15,49 @@ export default function LoginPage() {
   const router = useRouter();
   const setUser = useAppStore((s) => s.setUser);
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [ssoHint, setSsoHint] = useState<string | null>(null);
+  const [ssoEnforced, setSsoEnforced] = useState(false);
+
+  async function onEmailBlur() {
+    if (!email.includes("@")) return;
+    try {
+      const d = await api.ssoDiscover(email);
+      if (d.sso_available) {
+        setSsoHint(`SSO available via ${d.provider}`);
+        setSsoEnforced(!!d.enforced);
+      } else {
+        setSsoHint(null);
+        setSsoEnforced(false);
+      }
+    } catch {
+      setSsoHint(null);
+      setSsoEnforced(false);
+    }
+  }
+
+  async function continueWithSso() {
+    if (!email.includes("@")) {
+      toast.error("Enter your work email first");
+      return;
+    }
+    setSsoLoading(true);
+    try {
+      const start = await api.ssoStart({ email });
+      window.location.href = start.authorize_url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "SSO start failed");
+      setSsoLoading(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (ssoEnforced) {
+      await continueWithSso();
+      return;
+    }
     const form = new FormData(e.currentTarget);
     setLoading(true);
     try {
@@ -57,23 +97,55 @@ export default function LoginPage() {
               required
               autoComplete="email"
               placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={onEmailBlur}
             />
+            {ssoHint && (
+              <p className="text-xs text-signal-deep">{ssoHint}</p>
+            )}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              minLength={8}
-            />
-          </div>
-          <Button type="submit" variant="signal" className="w-full" disabled={loading}>
-            {loading ? "Signing in…" : "Sign in"}
-          </Button>
+          {!ssoEnforced && (
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                required={!ssoEnforced}
+                autoComplete="current-password"
+                minLength={8}
+              />
+            </div>
+          )}
+          {!ssoEnforced && (
+            <Button type="submit" variant="signal" className="w-full" disabled={loading}>
+              {loading ? "Signing in…" : "Sign in"}
+            </Button>
+          )}
         </form>
+
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-line" />
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            or
+          </span>
+          <div className="h-px flex-1 bg-line" />
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={ssoLoading}
+          onClick={continueWithSso}
+        >
+          {ssoLoading ? "Redirecting…" : "Continue with SSO"}
+        </Button>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          OIDC / SAML / Google / Microsoft via your workspace connection
+        </p>
+
         <p className="mt-6 text-center text-sm text-muted-foreground">
           New to Veritas?{" "}
           <Link href="/register" className="font-medium text-signal-deep hover:underline">

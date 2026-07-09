@@ -5,6 +5,7 @@ from app.services.compliance.service import (
     list_retention,
     list_sso,
     run_export_job,
+    soft_delete_sso,
     upsert_retention,
     upsert_sso,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "list_retention",
     "list_sso",
     "run_export_job",
+    "soft_delete_sso",
     "upsert_retention",
     "upsert_sso",
 ]

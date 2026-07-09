@@ -389,6 +389,38 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>SSO</CardTitle>
+          <CardDescription>
+            OIDC / SAML / Google / Microsoft for this workspace (owners)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <SsoSettings workspaceId={workspace?.id} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Webhooks</CardTitle>
+          <CardDescription>Outbound event URLs (owners)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <WebhookSettings workspaceId={workspace?.id} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Notification preferences</CardTitle>
+          <CardDescription>In-app and email channels</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <NotificationPrefs />
+        </CardContent>
+      </Card>
+
       <Card className="mt-6 mb-10">
         <CardHeader>
           <CardTitle>Audit log</CardTitle>
@@ -409,6 +441,213 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function SsoSettings({ workspaceId }: { workspaceId?: string }) {
+  const [provider, setProvider] = useState("oidc");
+  const [domains, setDomains] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [enforced, setEnforced] = useState(false);
+  const [rows, setRows] = useState<
+    Awaited<ReturnType<typeof api.listSsoConnections>>
+  >([]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    api.listSsoConnections(workspaceId).then(setRows).catch(() => setRows([]));
+  }, [workspaceId]);
+
+  if (!workspaceId) return <p className="text-muted-foreground">Select a workspace.</p>;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select
+          className="rounded-md border border-line bg-white px-2 py-2 text-sm"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+        >
+          <option value="oidc">oidc</option>
+          <option value="saml">saml</option>
+          <option value="google">google</option>
+          <option value="microsoft">microsoft</option>
+        </select>
+        <Input
+          placeholder="Domains (comma-separated)"
+          value={domains}
+          onChange={(e) => setDomains(e.target.value)}
+        />
+        <Input
+          placeholder="Issuer URL"
+          value={issuer}
+          onChange={(e) => setIssuer(e.target.value)}
+        />
+        <Input
+          placeholder="Client ID"
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+        />
+        <Input
+          placeholder="Client secret"
+          type="password"
+          value={clientSecret}
+          onChange={(e) => setClientSecret(e.target.value)}
+        />
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={enforced}
+            onChange={(e) => setEnforced(e.target.checked)}
+          />
+          Enforce SSO (block password login)
+        </label>
+      </div>
+      <Button
+        size="sm"
+        onClick={async () => {
+          try {
+            await api.upsertSsoConnection(workspaceId, {
+              provider,
+              issuer_url: issuer || undefined,
+              client_id: clientId || undefined,
+              client_secret: clientSecret || undefined,
+              domains: domains
+                .split(",")
+                .map((d) => d.trim())
+                .filter(Boolean),
+              is_enforced: enforced,
+            });
+            toast.success("SSO connection saved");
+            setRows(await api.listSsoConnections(workspaceId));
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "SSO save failed");
+          }
+        }}
+      >
+        Save SSO
+      </Button>
+      <ul className="space-y-1 text-xs text-ink-soft">
+        {rows.map((r) => (
+          <li key={r.id}>
+            {r.provider} · {(r.domains || []).join(", ")} ·{" "}
+            {r.is_enforced ? "enforced" : "optional"}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WebhookSettings({ workspaceId }: { workspaceId?: string }) {
+  const [url, setUrl] = useState("");
+  const [secretOnce, setSecretOnce] = useState<string | null>(null);
+  const [rows, setRows] = useState<
+    Awaited<ReturnType<typeof api.listWebhooks>>
+  >([]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    api.listWebhooks(workspaceId).then(setRows).catch(() => setRows([]));
+  }, [workspaceId]);
+
+  if (!workspaceId) return <p className="text-muted-foreground">Select a workspace.</p>;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <Input
+          placeholder="https://hooks.example.com/veritas"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <Button
+          size="sm"
+          onClick={async () => {
+            try {
+              const ep = await api.createWebhook(workspaceId, {
+                url,
+                event_types: ["document.ready", "document.failed"],
+              });
+              setSecretOnce(ep.secret || null);
+              setUrl("");
+              toast.success("Webhook created — copy the secret now");
+              setRows(await api.listWebhooks(workspaceId));
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Create failed");
+            }
+          }}
+        >
+          Add
+        </Button>
+      </div>
+      {secretOnce && (
+        <p className="rounded-lg bg-mist px-3 py-2 font-mono text-xs break-all">
+          {secretOnce}
+        </p>
+      )}
+      <ul className="space-y-1 text-xs">
+        {rows.map((w) => (
+          <li key={w.id} className="flex justify-between gap-2">
+            <span className="truncate">
+              {w.url} · {(w.event_types || []).join(", ")}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await api.deleteWebhook(workspaceId, w.id);
+                setRows(await api.listWebhooks(workspaceId));
+              }}
+            >
+              Delete
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function NotificationPrefs() {
+  const [prefs, setPrefs] = useState<
+    Awaited<ReturnType<typeof api.listNotificationPreferences>>
+  >([]);
+
+  useEffect(() => {
+    api.listNotificationPreferences().then(setPrefs).catch(() => setPrefs([]));
+  }, []);
+
+  if (prefs.length === 0) {
+    return <p className="text-muted-foreground">No preferences loaded.</p>;
+  }
+
+  return (
+    <ul className="space-y-2">
+      {prefs.map((p) => (
+        <li key={p.id} className="flex items-center justify-between gap-2">
+          <span>
+            {p.event_type} · {p.channel}
+          </span>
+          <input
+            type="checkbox"
+            checked={p.enabled}
+            onChange={async (e) => {
+              const updated = await api.updateNotificationPreference({
+                event_type: p.event_type,
+                channel: p.channel,
+                enabled: e.target.checked,
+              });
+              setPrefs((prev) =>
+                prev.map((x) => (x.id === updated.id ? updated : x)),
+              );
+            }}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }
 

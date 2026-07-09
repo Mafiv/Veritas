@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
+    # SSO / OIDC / SAML
+    use_mock_sso: bool = True  # local IdP simulation without real OIDC provider
+    sso_callback_base_url: str = ""  # defaults to frontend_url when empty
+    sso_state_ttl_seconds: int = 600
+    sso_jit_default_role: Literal["viewer", "editor"] = "viewer"
+    webhook_max_attempts: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

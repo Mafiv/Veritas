@@ -26,6 +26,19 @@ async def lifespan(app: FastAPI):
 
     # Auto-create tables for development (Alembic for production)
     async with engine.begin() as conn:
+        from app.services.retrieval.pgvector import ensure_pgvector_extension
+
+        # Best-effort: needed when DocumentChunk.embedding_vec uses Vector type
+        try:
+            await conn.execute(
+                __import__("sqlalchemy", fromlist=["text"]).text(
+                    "CREATE EXTENSION IF NOT EXISTS vector"
+                )
+            )
+        except Exception:
+            pass
+        if settings.use_pgvector:
+            await ensure_pgvector_extension(conn)
         await conn.run_sync(Base.metadata.create_all)
 
     yield
