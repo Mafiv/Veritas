@@ -1,4 +1,20 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is the Veritas frontend (Next.js App Router).
+
+## Environment
+
+Create a local env file from the example:
+
+```bash
+cp .env.example .env.local
+```
+
+Required variables:
+
+- `NEXT_PUBLIC_API_URL` (default in example: `http://localhost:8000/api/v1`)
+
+Integration note:
+
+- Backend `FRONTEND_URL` and `CORS_ORIGINS` in `backend/.env` should include your frontend origin (for local dev: `http://localhost:3000`).
 
 ## Getting Started
 
