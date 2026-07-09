@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.tasks.embedding_tasks",
         "app.tasks.summarization_tasks",
         "app.tasks.cleanup_tasks",
+        "app.tasks.webhook_tasks",
     ],
 )
 
@@ -29,6 +30,18 @@ celery_app.conf.update(
     beat_schedule={
         "cleanup-orphaned-files-daily": {
             "task": "app.tasks.cleanup_tasks.cleanup_orphaned_files",
+            "schedule": 60 * 60 * 24,
+        },
+        "deliver-pending-webhooks": {
+            "task": "app.tasks.webhook_tasks.deliver_pending_webhooks",
+            "schedule": 60.0,
+        },
+        "rollup-usage-meters-hourly": {
+            "task": "app.tasks.webhook_tasks.rollup_usage_meters",
+            "schedule": 60 * 60,
+        },
+        "retention-purge-daily": {
+            "task": "app.tasks.webhook_tasks.run_retention_purge_all",
             "schedule": 60 * 60 * 24,
         },
     },
