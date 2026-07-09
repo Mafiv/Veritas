@@ -13,6 +13,7 @@ from app.api.deps import CurrentUser, DbSession, check_query_quota
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.models.domain import (
     AuditLog,
+    MessageRole,
     ChatMessage,
     ChatThread,
     UsageEvent,
@@ -130,7 +131,7 @@ async def chat_query(
     thread = await _get_or_create_thread(db, workspace_id, user.id, body.thread_id, body.question)
     history = await _load_history(db, thread.id)
 
-    user_msg = ChatMessage(thread_id=thread.id, role="user", content=body.question)
+    user_msg = ChatMessage(thread_id=thread.id, role=MessageRole.USER, content=body.question)
     db.add(user_msg)
     await db.flush()
 
@@ -146,7 +147,7 @@ async def chat_query(
 
     assistant = ChatMessage(
         thread_id=thread.id,
-        role="assistant",
+        role=MessageRole.ASSISTANT,
         content=result.answer,
         citations=[c.model_dump(mode="json") for c in result.citations],
         latency_ms=result.latency_ms,
@@ -198,7 +199,7 @@ async def chat_stream(
     thread = await _get_or_create_thread(db, workspace_id, user.id, body.thread_id, body.question)
     history = await _load_history(db, thread.id)
 
-    user_msg = ChatMessage(thread_id=thread.id, role="user", content=body.question)
+    user_msg = ChatMessage(thread_id=thread.id, role=MessageRole.USER, content=body.question)
     db.add(user_msg)
     await db.flush()
     # Commit early so stream generator can open a fresh session if needed
@@ -240,7 +241,7 @@ async def chat_stream(
 
             assistant = ChatMessage(
                 thread_id=thread_id,
-                role="assistant",
+                role=MessageRole.ASSISTANT,
                 content=full_answer,
                 citations=citations_payload,
                 latency_ms=latency_ms,
@@ -347,7 +348,7 @@ async def _load_history(db: DbSession, thread_id: UUID) -> list[tuple[str, str]]
         .limit(12)
     )
     messages = list(reversed(result.scalars().all()))
-    return [(m.role, m.content) for m in messages]
+    return [(m.role.value if hasattr(m.role, "value") else m.role, m.content) for m in messages]
 
 
 def _sse(event: str, data: dict) -> str:
