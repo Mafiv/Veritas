@@ -44,7 +44,25 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 ```
 
-Set `USE_MOCK_LLM=true` (default) to run without an OpenAI key. Set `OPENAI_API_KEY` and `USE_MOCK_LLM=false` for real embeddings/chat.
+Set `USE_MOCK_LLM=true` (default) to run without any LLM API keys. Set `USE_MOCK_LLM=false` and configure a provider for real chat completions (embeddings still use `OPENAI_API_KEY` separately).
+
+### Switching LLM providers
+
+Chat completions are routed through [LiteLLM](https://docs.litellm.ai/). Switch providers by changing `LLM_MODEL` and the matching API key in `backend/.env` — no code changes required.
+
+| Provider | `LLM_MODEL` example | API key env var |
+|----------|-------------------|-----------------|
+| OpenAI | `openai/gpt-4o` | `OPENAI_API_KEY` |
+| Google Gemini | `gemini/gemini-1.5-pro` | `GEMINI_API_KEY` |
+| GitHub Models | `github/gpt-4o-mini` | `GITHUB_API_KEY` (GitHub PAT; free tier, rate-limited — good for local testing) |
+| Anthropic | `anthropic/claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
+
+```bash
+# Example: Gemini
+LLM_MODEL=gemini/gemini-1.5-pro
+GEMINI_API_KEY=your-key-here
+USE_MOCK_LLM=false
+```
 
 ### 3. Frontend
 

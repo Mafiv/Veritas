@@ -1,15 +1,24 @@
-"""LLM client with OpenAI + mock streaming fallback."""
+"""LLM client with LiteLLM multi-provider support + mock fallback."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import AsyncIterator
-from typing import Any
 
-import httpx
+import litellm
 
 from app.core.config import get_settings
+
+_PROVIDER_API_KEYS: dict[str, str] = {
+    "openai": "openai_api_key",
+    "gemini": "gemini_api_key",
+    "github": "github_api_key",
+    "anthropic": "anthropic_api_key",
+}
+
+
+class LLMProviderError(RuntimeError):
+    """Raised when an LLM provider is misconfigured or the call fails."""
 
 
 class LLMClient:
@@ -25,28 +34,33 @@ class LLMClient:
         temperature: float = 0.2,
         model: str | None = None,
     ) -> str:
-        if self.settings.use_mock_llm or not self.settings.openai_api_key:
+        if self.settings.use_mock_llm:
             return self._mock_complete(system=system, user=user)
+
+        resolved_model = model or self.settings.llm_provider_model
+        self._ensure_provider_configured(resolved_model)
+
         try:
-            return await self._openai_chat(
-                system=system,
-                user=user,
+            response = await litellm.acompletion(
+                model=resolved_model,
+                messages=self._build_messages(system=system, user=user),
                 max_tokens=max_tokens,
                 temperature=temperature,
-                model=model or self.settings.chat_model,
             )
-        except Exception:
-            # Automatic model fallback
-            try:
-                return await self._openai_chat(
-                    system=system,
-                    user=user,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    model=self.settings.chat_fallback_model,
+            content = response.choices[0].message.content
+            if content is None:
+                provider = self._provider_name(resolved_model)
+                raise LLMProviderError(
+                    f"Empty response from provider '{provider}' model '{resolved_model}'"
                 )
-            except Exception:
-                return self._mock_complete(system=system, user=user)
+            return content
+        except LLMProviderError:
+            raise
+        except Exception as exc:
+            provider = self._provider_name(resolved_model)
+            raise LLMProviderError(
+                f"LLM call failed for provider '{provider}' model '{resolved_model}': {exc}"
+            ) from exc
 
     async def stream(
         self,
@@ -56,80 +70,66 @@ class LLMClient:
         max_tokens: int = 1200,
         temperature: float = 0.2,
     ) -> AsyncIterator[str]:
-        if self.settings.use_mock_llm or not self.settings.openai_api_key:
+        if self.settings.use_mock_llm:
             text = self._mock_complete(system=system, user=user)
             for token in _tokenize_words(text):
                 yield token
                 await asyncio.sleep(0.02)
             return
 
-        headers = {
-            "Authorization": f"Bearer {self.settings.openai_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload: dict[str, Any] = {
-            "model": self.settings.chat_model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": True,
-        }
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                f"{self.settings.openai_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    data = line[6:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        delta = chunk["choices"][0]["delta"].get("content")
-                        if delta:
-                            yield delta
-                    except (json.JSONDecodeError, KeyError, IndexError):
-                        continue
+        resolved_model = self.settings.llm_provider_model
+        self._ensure_provider_configured(resolved_model)
 
-    async def _openai_chat(
-        self,
-        *,
-        system: str,
-        user: str,
-        max_tokens: int,
-        temperature: float,
-        model: str,
-    ) -> str:
-        headers = {
-            "Authorization": f"Bearer {self.settings.openai_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            resp = await client.post(
-                f"{self.settings.openai_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
+        try:
+            response = await litellm.acompletion(
+                model=resolved_model,
+                messages=self._build_messages(system=system, user=user),
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True,
             )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            async for chunk in response:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield delta
+        except LLMProviderError:
+            raise
+        except Exception as exc:
+            provider = self._provider_name(resolved_model)
+            raise LLMProviderError(
+                f"LLM stream failed for provider '{provider}' model '{resolved_model}': {exc}"
+            ) from exc
+
+    @staticmethod
+    def _build_messages(*, system: str, user: str) -> list[dict[str, str]]:
+        return [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+
+    @staticmethod
+    def _provider_name(model: str) -> str:
+        if "/" in model:
+            return model.split("/", 1)[0].lower()
+        return "openai"
+
+    def _ensure_provider_configured(self, model: str) -> None:
+        provider = self._provider_name(model)
+        settings_attr = _PROVIDER_API_KEYS.get(provider)
+        if settings_attr is None:
+            supported = ", ".join(sorted(_PROVIDER_API_KEYS))
+            raise LLMProviderError(
+                f"Unsupported LLM provider '{provider}' in model '{model}'. "
+                f"Supported providers: {supported}"
+            )
+
+        api_key = getattr(self.settings, settings_attr, "")
+        if not api_key:
+            env_var = settings_attr.upper()
+            raise LLMProviderError(
+                f"Missing API key for provider '{provider}' (model '{model}'). "
+                f"Set {env_var} in the environment."
+            )
 
     def _mock_complete(self, *, system: str, user: str) -> str:
         # Extract context blocks if present for grounded mock answers
