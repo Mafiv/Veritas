@@ -58,6 +58,16 @@ def create_app() -> FastAPI:
     async def health() -> HealthResponse:
         return HealthResponse(status="ok", app=settings.app_name, version="0.1.0")
 
+    @app.get("/health/retrieval", tags=["health"])
+    async def health_retrieval() -> dict:
+        from app.services.retrieval.pgvector import describe_vector_strategy
+
+        return {
+            "reranker_backend": settings.reranker_backend,
+            "use_mock_llm": settings.use_mock_llm,
+            "vector": describe_vector_strategy(),
+        }
+
     app.include_router(api_router, prefix=settings.api_v1_prefix)
     return app
 

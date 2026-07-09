@@ -67,6 +67,19 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
+    # Email
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@veritas.local"
+    smtp_use_tls: bool = True
+
+    # Retrieval productionization
+    use_pgvector: bool = False
+    reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
 
 @lru_cache
 def get_settings() -> Settings:
