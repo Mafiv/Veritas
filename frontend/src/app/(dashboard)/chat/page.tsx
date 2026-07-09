@@ -1,29 +1,36 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PanelRightOpen } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { PanelRightOpen, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { ChatComposer } from "@/components/chat/composer";
 import { CitationsPanel } from "@/components/chat/citations-panel";
+import { ChatEmptyState } from "@/components/chat/empty-state";
 import { MessageList } from "@/components/chat/message-list";
+import { ThreadsRail } from "@/components/chat/threads-rail";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, streamChat, type Citation, type Document, type Thread } from "@/lib/api-client";
+import {
+  api,
+  streamChat,
+  type Citation,
+  type Document,
+  type Thread,
+  type UsageStats,
+} from "@/lib/api-client";
 import { useAppStore, useChatStore } from "@/lib/store";
-import { cn, formatRelative } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 /*
-  Chat layout wireframe:
-  ┌──────────┬────────────────────────────┬─────────────┐
-  │ threads  │  messages (stream+cites)   │  sources    │
-  │ list     │  composer                  │  panel      │
-  └──────────┴────────────────────────────┴─────────────┘
-  Mobile: threads + sources collapse into sheets.
+  Recommended layout:
+  | Sidebar | Threads (compact) | Chat (~70%) | Sources (only when citations) |
 */
 
 export default function ChatPage() {
+  const router = useRouter();
   const workspace = useAppStore((s) => s.workspace);
   const {
     messages,
@@ -41,9 +48,11 @@ export default function ChatPage() {
 
   const [threads, setThreads] = useState<Thread[]>([]);
   const [docs, setDocs] = useState<Document[]>([]);
+  const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCite, setActiveCite] = useState<string | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sourcesCollapsed, setSourcesCollapsed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,13 +62,15 @@ export default function ChatPage() {
       setLoading(true);
       setError(null);
       try {
-        const [t, d] = await Promise.all([
+        const [t, d, u] = await Promise.all([
           api.listThreads(workspace.id),
           api.listDocuments(workspace.id),
+          api.usage().catch(() => null),
         ]);
         if (cancelled) return;
         setThreads(t);
         setDocs(d.items);
+        setUsage(u);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load chat");
       } finally {
@@ -71,17 +82,42 @@ export default function ChatPage() {
     };
   }, [workspace?.id]);
 
-  const suggestions = useMemo(() => {
-    const qs = docs
-      .filter((d) => d.status === "ready" && d.suggested_questions?.length)
-      .flatMap((d) => d.suggested_questions || []);
-    return Array.from(new Set(qs)).slice(0, 4);
-  }, [docs]);
+  // Auto-open sources when citations arrive; keep collapsed preference otherwise
+  useEffect(() => {
+    if (citations.length > 0) {
+      setSourcesCollapsed(false);
+    }
+  }, [citations.length]);
+
+  const readyDocs = useMemo(
+    () => docs.filter((d) => d.status === "ready"),
+    [docs],
+  );
+
+  const stats = useMemo(() => {
+    const chunks =
+      usage?.chunks_total ??
+      docs.reduce((sum, d) => sum + (d.chunk_count || 0), 0);
+    const bytes = docs.reduce((sum, d) => sum + (d.file_size || 0), 0);
+    const storageLabel =
+      bytes >= 1024 * 1024
+        ? `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+        : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return {
+      documents: usage?.documents_count ?? docs.length,
+      chunks,
+      embeddings: chunks,
+      storageLabel: docs.length ? storageLabel : "0 MB",
+    };
+  }, [docs, usage]);
+
+  const showSourcesPanel = citations.length > 0 && !sourcesCollapsed;
 
   async function openThread(id: string) {
     if (!workspace) return;
     setThreadId(id);
     setCitations([]);
+    setActiveCite(null);
     try {
       const msgs = await api.listMessages(workspace.id, id);
       setMessages(
@@ -91,7 +127,9 @@ export default function ChatPage() {
         })),
       );
       const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant");
-      if (lastAssistant?.citations) setCitations(lastAssistant.citations);
+      if (lastAssistant?.citations?.length) {
+        setCitations(lastAssistant.citations);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load thread");
     }
@@ -99,8 +137,9 @@ export default function ChatPage() {
 
   async function handleSend(question: string) {
     if (!workspace || isStreaming) return;
-    if (!docs.some((d) => d.status === "ready")) {
-      toast.error("Upload and wait for at least one document to finish indexing.");
+    if (!readyDocs.length) {
+      toast.error("Upload at least one document before asking questions.");
+      router.push("/documents");
       return;
     }
 
@@ -124,8 +163,8 @@ export default function ChatPage() {
     appendMessage(assistantMsg);
     setStreaming(true);
     setCitations([]);
+    setSourcesCollapsed(false);
 
-    let localThread = threadId;
     let answer = "";
 
     try {
@@ -138,10 +177,7 @@ export default function ChatPage() {
           use_rerank: true,
         },
         {
-          onThread: (id) => {
-            localThread = id;
-            setThreadId(id);
-          },
+          onThread: (id) => setThreadId(id),
           onCitations: (cites) => {
             setCitations(cites);
             updateLastAssistant({ citations: cites });
@@ -160,7 +196,6 @@ export default function ChatPage() {
             });
           },
           onMessage: (data) => {
-            localThread = data.thread_id;
             setThreadId(data.thread_id);
             updateLastAssistant({
               id: data.message_id,
@@ -172,9 +207,6 @@ export default function ChatPage() {
       );
       const refreshed = await api.listThreads(workspace.id);
       setThreads(refreshed);
-      if (localThread) {
-        // keep selection
-      }
     } catch (err) {
       updateLastAssistant({
         content: "Something went wrong generating this answer. Please try again.",
@@ -197,15 +229,17 @@ export default function ChatPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full gap-0">
-        <div className="hidden w-56 border-r border-line p-4 md:block">
-          <Skeleton className="mb-3 h-4 w-20" />
-          <Skeleton className="mb-2 h-8 w-full" />
+      <div className="flex h-full min-h-0 flex-1">
+        <div className="hidden w-[220px] border-r border-line p-4 lg:block">
+          <Skeleton className="mb-3 h-4 w-16" />
+          <Skeleton className="mb-2 h-9 w-full" />
           <Skeleton className="mb-2 h-8 w-full" />
           <Skeleton className="h-8 w-full" />
         </div>
-        <div className="flex-1 p-6">
-          <Skeleton className="mx-auto h-24 w-full max-w-3xl" />
+        <div className="flex-1 p-8">
+          <Skeleton className="mb-4 h-8 w-40" />
+          <Skeleton className="mb-6 h-4 w-72" />
+          <Skeleton className="h-48 w-full max-w-3xl" />
         </div>
       </div>
     );
@@ -222,98 +256,74 @@ export default function ChatPage() {
     );
   }
 
-  const readyDocs = docs.filter((d) => d.status === "ready");
-
   return (
-    <div className="flex h-[calc(100vh-0px)] min-h-0 flex-1">
-      {/* Threads rail */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-line bg-white/50 md:flex">
-        <div className="flex items-center justify-between px-3 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate">
-            Threads
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => reset()}
-          >
-            New
-          </Button>
-        </div>
-        <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
-          {threads.length === 0 ? (
-            <p className="px-2 py-4 text-xs text-muted-foreground">
-              No conversations yet. Ask your first question.
-            </p>
-          ) : (
-            threads.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => openThread(t.id)}
-                className={cn(
-                  "w-full rounded-lg px-2.5 py-2 text-left transition",
-                  threadId === t.id ? "bg-mist" : "hover:bg-mist/70",
-                )}
-              >
-                <p className="truncate text-sm font-medium text-ink">{t.title}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {formatRelative(t.updated_at)} · {t.message_count} msgs
-                </p>
-              </button>
-            ))
-          )}
-        </div>
-      </aside>
+    <div className="flex min-h-0 flex-1 overflow-hidden">
+      <ThreadsRail
+        threads={threads}
+        activeId={threadId}
+        onSelect={openThread}
+        onNew={() => reset()}
+      />
 
-      {/* Main chat */}
-      <section className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-line bg-white/60 px-4 py-3">
+      <section className="flex min-w-0 flex-1 flex-col bg-paper">
+        <div className="flex items-center justify-between gap-3 border-b border-line bg-white/80 px-5 py-4 backdrop-blur">
           <div>
-            <h1 className="font-display text-lg font-semibold text-ink">Chat</h1>
-            <p className="text-xs text-muted-foreground">
-              {workspace.name} · {readyDocs.length} indexed document
-              {readyDocs.length === 1 ? "" : "s"}
+            <h1 className="font-display text-[28px] font-semibold leading-none tracking-tight text-ink">
+              Chat
+            </h1>
+            <p className="mt-1.5 text-base text-slate">
+              Ask questions grounded in your documents.
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="lg:hidden"
-            onClick={() => setSourcesOpen(true)}
-          >
-            <PanelRightOpen className="mr-1.5 h-4 w-4" />
-            Sources
-          </Button>
+          <div className="flex items-center gap-2">
+            {citations.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("rounded-xl", showSourcesPanel && "hidden xl:inline-flex")}
+                onClick={() => {
+                  if (showSourcesPanel) setSourcesCollapsed(true);
+                  else {
+                    setSourcesCollapsed(false);
+                    setSourcesOpen(true);
+                  }
+                }}
+              >
+                <PanelRightOpen className="mr-1.5 h-4 w-4" />
+                Sources
+                <span className="ml-1.5 rounded-full bg-signal-soft px-1.5 text-[10px] font-semibold text-signal-deep">
+                  {citations.length}
+                </span>
+              </Button>
+            )}
+            <Button
+              size="sm"
+              className="btn-gradient hidden rounded-xl sm:inline-flex"
+              onClick={() => router.push("/documents")}
+            >
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+              Upload documents
+            </Button>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {messages.length === 0 ? (
-            <EmptyState
-              title="Ask with evidence"
-              description={
-                readyDocs.length
-                  ? "Questions are answered only from your uploaded documents, with inline citations."
-                  : "Upload your first document to get started — then come back and ask anything."
-              }
-              actionLabel={readyDocs.length ? undefined : "Go to Documents"}
-              onAction={
-                readyDocs.length
-                  ? undefined
-                  : () => {
-                      window.location.href = "/documents";
-                    }
-              }
-              icon={readyDocs.length ? "docs" : "upload"}
+            <ChatEmptyState
+              hasDocuments={readyDocs.length > 0}
+              stats={stats}
+              onPrompt={handleSend}
+              onUpload={() => router.push("/documents")}
             />
           ) : (
             <MessageList
               messages={messages}
               citations={citations}
               workspaceId={workspace.id}
+              isStreaming={isStreaming}
               onSelectCitation={(c: Citation) => {
                 setActiveCite(c.chunk_id);
+                setSourcesCollapsed(false);
                 setSourcesOpen(true);
               }}
             />
@@ -323,21 +333,24 @@ export default function ChatPage() {
         <ChatComposer
           onSend={handleSend}
           disabled={isStreaming}
-          suggestions={messages.length === 0 ? suggestions : undefined}
+          onAttach={() => router.push("/documents")}
         />
       </section>
 
-      {/* Sources panel desktop */}
-      <aside className="hidden w-80 shrink-0 border-l border-line bg-white/70 lg:block">
-        <CitationsPanel
-          citations={citations}
-          activeId={activeCite}
-          onSelect={(c) => setActiveCite(c.chunk_id)}
-        />
-      </aside>
+      {/* Sources — only when citations exist */}
+      {showSourcesPanel && (
+        <aside className="hidden w-[300px] shrink-0 border-l border-line xl:block">
+          <CitationsPanel
+            citations={citations}
+            activeId={activeCite}
+            onSelect={(c) => setActiveCite(c.chunk_id)}
+            onClose={() => setSourcesCollapsed(true)}
+          />
+        </aside>
+      )}
 
-      <Sheet open={sourcesOpen} onOpenChange={setSourcesOpen}>
-        <SheetContent side="right" className="p-0">
+      <Sheet open={sourcesOpen && citations.length > 0} onOpenChange={setSourcesOpen}>
+        <SheetContent side="right" className="w-full max-w-sm p-0 sm:max-w-md">
           <SheetHeader className="sr-only">
             <SheetTitle>Sources</SheetTitle>
           </SheetHeader>
@@ -345,6 +358,7 @@ export default function ChatPage() {
             citations={citations}
             activeId={activeCite}
             onSelect={(c) => setActiveCite(c.chunk_id)}
+            onClose={() => setSourcesOpen(false)}
           />
         </SheetContent>
       </Sheet>

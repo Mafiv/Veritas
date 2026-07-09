@@ -3,25 +3,27 @@
 /*
   Veritas design tokens
   Direction: cool archival ink + signal teal — precision, evidence, clarity.
-  Not cream/serif, not purple glow, not default zinc.
+  ChatGPT conversation · Perplexity evidence · Linear spacing · Notion minimalism.
 */
 
 :root {
-  /* Brand palette */
   --ink: #0c2428;
   --ink-soft: #1a3a40;
   --mist: #e7eef0;
-  --paper: #f4f8f9;
+  --paper: #f7fafb;
   --signal: #0f9f8a;
   --signal-deep: #0b7a6a;
   --signal-soft: #d5f3ed;
   --slate: #5c7378;
-  --line: #c9d6da;
+  --line: #d5e0e3;
   --danger: #c0392b;
   --warning: #b86e00;
   --success: #1a7a52;
+  --prompt-purple: #7c5cbf;
+  --prompt-blue: #3b82a8;
+  --prompt-green: #2a9d6e;
+  --prompt-orange: #d97706;
 
-  /* Semantic mapped to shadcn-style vars */
   --background: var(--paper);
   --foreground: var(--ink);
   --card: #ffffff;
@@ -41,10 +43,11 @@
   --border: var(--line);
   --input: var(--line);
   --ring: var(--signal);
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  --shadow-soft: 0 1px 2px rgb(12 36 40 / 0.04), 0 8px 24px rgb(12 36 40 / 0.06);
-  --shadow-lift: 0 2px 8px rgb(12 36 40 / 0.08), 0 16px 40px rgb(12 36 40 / 0.08);
+  --shadow-soft: 0 1px 2px rgb(12 36 40 / 0.04), 0 8px 24px rgb(12 36 40 / 0.05);
+  --shadow-lift: 0 2px 8px rgb(12 36 40 / 0.07), 0 16px 40px rgb(12 36 40 / 0.08);
+  --shadow-glow: 0 0 0 3px rgb(15 159 138 / 0.18), 0 8px 24px rgb(15 159 138 / 0.08);
 }
 
 @theme inline {
@@ -80,6 +83,10 @@
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-success: var(--success);
+  --color-prompt-purple: var(--prompt-purple);
+  --color-prompt-blue: var(--prompt-blue);
+  --color-prompt-green: var(--prompt-green);
+  --color-prompt-orange: var(--prompt-orange);
 
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
@@ -89,6 +96,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
 @layer base {
@@ -101,10 +109,7 @@
   }
 
   body {
-    background:
-      radial-gradient(1200px 600px at 10% -10%, rgb(15 159 138 / 0.10), transparent 55%),
-      radial-gradient(900px 500px at 100% 0%, rgb(12 36 40 / 0.06), transparent 50%),
-      linear-gradient(180deg, #eef4f5 0%, var(--paper) 40%, #eef3f4 100%);
+    background: #f7fafb;
     color: var(--foreground);
     font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
     min-height: 100vh;
@@ -136,9 +141,9 @@
 
   .veritas-grid {
     background-image:
-      linear-gradient(rgb(12 36 40 / 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(12 36 40 / 0.04) 1px, transparent 1px);
-    background-size: 48px 48px;
+      linear-gradient(rgb(12 36 40 / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(12 36 40 / 0.035) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
 
   .shadow-soft {
@@ -147,6 +152,54 @@
 
   .shadow-lift {
     box-shadow: var(--shadow-lift);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .btn-gradient {
+    background: linear-gradient(135deg, #12b39b 0%, #0b7a6a 100%);
+    color: white;
+    transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+  }
+
+  .btn-gradient:hover {
+    filter: brightness(1.05);
+    box-shadow: 0 8px 20px rgb(15 159 138 / 0.28);
+  }
+
+  .btn-gradient:active {
+    transform: translateY(1px);
+  }
+
+  .nav-item {
+    position: relative;
+    transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+  }
+
+  .nav-item:hover {
+    transform: translateX(2px);
+  }
+
+  .nav-item-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 20%;
+    bottom: 20%;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--signal);
+  }
+
+  .composer-shell {
+    transition: box-shadow 180ms ease, border-color 180ms ease;
+  }
+
+  .composer-shell:focus-within {
+    border-color: rgb(15 159 138 / 0.55);
+    box-shadow: var(--shadow-glow);
   }
 
   .citation-chip {
@@ -184,16 +237,83 @@
     animation: blink 1s steps(1) infinite;
   }
 
+  .typing-dots span {
+    display: inline-block;
+    width: 0.35rem;
+    height: 0.35rem;
+    margin: 0 0.1rem;
+    border-radius: 999px;
+    background: var(--signal);
+    animation: typing 1.2s infinite ease-in-out;
+  }
+
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
   @keyframes blink {
     50% { opacity: 0; }
   }
 
+  @keyframes typing {
+    0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+  }
+
   @keyframes rise {
-    from { opacity: 0; transform: translateY(8px); }
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes float-y {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { box-shadow: 0 0 0 0 rgb(15 159 138 / 0.35); }
+    50% { box-shadow: 0 0 0 8px rgb(15 159 138 / 0); }
+  }
+
   .animate-rise {
-    animation: rise 400ms ease-out both;
+    animation: rise 420ms ease-out both;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 280ms ease-out both;
+  }
+
+  .animate-float {
+    animation: float-y 4.5s ease-in-out infinite;
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2.2s ease-out infinite;
+  }
+
+  .prompt-card {
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .prompt-card:hover {
+    transform: translateY(-2px);
+    border-color: rgb(15 159 138 / 0.45);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .thread-item {
+    transition: background 140ms ease, transform 140ms ease;
+  }
+
+  .thread-item:hover {
+    transform: translateX(1px);
+  }
+
+  .source-card {
+    animation: rise 320ms ease-out both;
   }
 }
