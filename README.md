@@ -109,6 +109,12 @@ Opinionated **archival ink + signal teal** identity — Space Grotesk (display) 
 | POST | `/api/v1/billing/checkout` | Stripe (or mock) upgrade |
 | POST | `/api/v1/workspaces/{id}/shared-links` | Expiring share links |
 | POST | `/api/v1/workspaces/{id}/webhooks` | Outbound webhooks (owner) |
+| PUT | `/api/v1/workspaces/{id}/sso` | SSO connection config (owner) |
+| PUT | `/api/v1/workspaces/{id}/retention-policies` | Retention policy upsert |
+| POST | `/api/v1/exports` | GDPR / workspace export job |
+| GET | `/health/retrieval` | Retrieval / pgvector introspection |
+
+Product phases (schema → services → UI → jobs → retrieval → compliance → hardening) are documented in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Tests
 

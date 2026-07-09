@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     auth,
     billing,
     chat,
+    compliance,
     documents,
     enterprise,
     invitations,
@@ -25,4 +26,5 @@ api_router.include_router(billing.router)
 api_router.include_router(audit.router)
 api_router.include_router(notifications.router)
 api_router.include_router(enterprise.router)
+api_router.include_router(compliance.router)
 api_router.include_router(admin.router)
