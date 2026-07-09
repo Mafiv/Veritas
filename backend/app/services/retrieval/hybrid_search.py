@@ -110,8 +110,11 @@ class HybridSearcher:
             .join(Document, Document.id == DocumentChunk.document_id)
             .where(DocumentChunk.workspace_id == workspace_id)
             .where(DocumentChunk.embedding.is_not(None))
+            .where(Document.deleted_at.is_(None))
         )
-        if document_ids:
+        if document_ids is not None:
+            if not document_ids:
+                return []
             stmt = stmt.where(DocumentChunk.document_id.in_(document_ids))
 
         result = await db.execute(stmt)

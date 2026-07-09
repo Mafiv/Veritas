@@ -7,18 +7,18 @@ from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession, check_query_quota
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.api.deps import CurrentUser, DbSession, RequireEditor, RequireViewer
+from app.core.exceptions import NotFoundError
 from app.models.domain import (
-    AuditLog,
-    MessageRole,
     ChatMessage,
     ChatThread,
-    UsageEvent,
+    FeedbackVote,
+    MessageRole,
     User,
-    WorkspaceMember,
+    WorkspaceRole,
 )
 from app.models.schemas import (
     ChatQueryRequest,
@@ -28,21 +28,24 @@ from app.models.schemas import (
     ThreadCreate,
     ThreadOut,
 )
+from app.models.schemas.extended import (
+    MessageFeedbackCreate,
+    MessageFeedbackOut,
+    ThreadCommentCreate,
+    ThreadCommentOut,
+)
+from app.services.audit.logger import write_audit
+from app.services.billing import service as billing_service
+from app.services.chat import service as chat_service
+from app.services.documents import service as doc_service
 from app.services.llm.orchestrator import RAGOrchestrator
 
 router = APIRouter(tags=["chat"])
 rag = RAGOrchestrator()
 
 
-async def _require_member(db: DbSession, workspace_id: UUID, user_id: UUID) -> None:
-    mem = await db.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
-        )
-    )
-    if not mem.scalar_one_or_none():
-        raise ForbiddenError("No access to this workspace")
+class ThreadDocumentsUpdate(BaseModel):
+    document_ids: list[UUID]
 
 
 def _thread_out(thread: ChatThread, message_count: int = 0) -> ThreadOut:
@@ -59,12 +62,11 @@ def _thread_out(thread: ChatThread, message_count: int = 0) -> ThreadOut:
 
 @router.get("/workspaces/{workspace_id}/threads", response_model=list[ThreadOut])
 async def list_threads(
-    workspace_id: UUID, db: DbSession, user: CurrentUser
+    workspace_id: UUID, db: DbSession, user: CurrentUser, _access: RequireViewer
 ) -> list[ThreadOut]:
-    await _require_member(db, workspace_id, user.id)
     result = await db.execute(
         select(ChatThread)
-        .where(ChatThread.workspace_id == workspace_id)
+        .where(ChatThread.workspace_id == workspace_id, ChatThread.deleted_at.is_(None))
         .order_by(ChatThread.updated_at.desc())
     )
     threads = result.scalars().all()
@@ -83,9 +85,8 @@ async def list_threads(
 
 @router.post("/workspaces/{workspace_id}/threads", response_model=ThreadOut)
 async def create_thread(
-    workspace_id: UUID, body: ThreadCreate, db: DbSession, user: CurrentUser
+    workspace_id: UUID, body: ThreadCreate, db: DbSession, user: CurrentUser, _access: RequireEditor
 ) -> ThreadOut:
-    await _require_member(db, workspace_id, user.id)
     thread = ChatThread(
         workspace_id=workspace_id,
         created_by=user.id,
@@ -96,14 +97,42 @@ async def create_thread(
     return _thread_out(thread, 0)
 
 
+@router.put(
+    "/workspaces/{workspace_id}/threads/{thread_id}/documents",
+    response_model=list[UUID],
+)
+async def set_thread_documents(
+    workspace_id: UUID,
+    thread_id: UUID,
+    body: ThreadDocumentsUpdate,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireEditor,
+) -> list[UUID]:
+    thread = (
+        await db.execute(
+            select(ChatThread).where(
+                ChatThread.id == thread_id,
+                ChatThread.workspace_id == workspace_id,
+                ChatThread.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if not thread:
+        raise NotFoundError("Thread not found")
+    await chat_service.set_thread_documents(
+        db, thread_id=thread_id, document_ids=body.document_ids
+    )
+    return body.document_ids
+
+
 @router.get(
     "/workspaces/{workspace_id}/threads/{thread_id}/messages",
     response_model=list[MessageOut],
 )
 async def list_messages(
-    workspace_id: UUID, thread_id: UUID, db: DbSession, user: CurrentUser
+    workspace_id: UUID, thread_id: UUID, db: DbSession, user: CurrentUser, _access: RequireViewer
 ) -> list[ChatMessage]:
-    await _require_member(db, workspace_id, user.id)
     thread = (
         await db.execute(
             select(ChatThread).where(
@@ -121,15 +150,105 @@ async def list_messages(
     return list(result.scalars().all())
 
 
+@router.get(
+    "/workspaces/{workspace_id}/threads/{thread_id}/comments",
+    response_model=list[ThreadCommentOut],
+)
+async def list_comments(
+    workspace_id: UUID,
+    thread_id: UUID,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireViewer,
+) -> list[ThreadCommentOut]:
+    thread = (
+        await db.execute(
+            select(ChatThread).where(
+                ChatThread.id == thread_id, ChatThread.workspace_id == workspace_id
+            )
+        )
+    ).scalar_one_or_none()
+    if not thread:
+        raise NotFoundError("Thread not found")
+    rows = await chat_service.list_thread_comments(db, thread_id)
+    return [ThreadCommentOut.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/threads/{thread_id}/comments",
+    response_model=ThreadCommentOut,
+)
+async def create_comment(
+    workspace_id: UUID,
+    thread_id: UUID,
+    body: ThreadCommentCreate,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireViewer,
+) -> ThreadCommentOut:
+    thread = (
+        await db.execute(
+            select(ChatThread).where(
+                ChatThread.id == thread_id, ChatThread.workspace_id == workspace_id
+            )
+        )
+    ).scalar_one_or_none()
+    if not thread:
+        raise NotFoundError("Thread not found")
+    row = await chat_service.add_thread_comment(
+        db,
+        thread_id=thread_id,
+        user_id=user.id,
+        body=body.body,
+        parent_comment_id=body.parent_comment_id,
+    )
+    return ThreadCommentOut.model_validate(row)
+
+
+async def _resolve_document_scope(
+    db: DbSession,
+    *,
+    workspace_id: UUID,
+    user: User,
+    role: WorkspaceRole,
+    thread_id: UUID | None,
+    document_ids: list[UUID] | None,
+) -> list[UUID] | None:
+    scoped = document_ids
+    if thread_id and not scoped:
+        scoped = await chat_service.get_thread_document_ids(db, thread_id) or None
+    return await doc_service.readable_document_ids(
+        db,
+        workspace_id=workspace_id,
+        user_id=user.id,
+        role=role,
+        document_ids=scoped,
+    )
+
+
 @router.post("/workspaces/{workspace_id}/chat", response_model=ChatQueryResponse)
 async def chat_query(
-    workspace_id: UUID, body: ChatQueryRequest, db: DbSession, user: CurrentUser
+    workspace_id: UUID,
+    body: ChatQueryRequest,
+    db: DbSession,
+    user: CurrentUser,
+    access: RequireEditor,
 ) -> ChatQueryResponse:
-    await _require_member(db, workspace_id, user.id)
-    await check_query_quota(user, db)
+    await billing_service.check_query_quota_metered(
+        db, user=user, workspace_id=workspace_id
+    )
+    _, member = access
 
     thread = await _get_or_create_thread(db, workspace_id, user.id, body.thread_id, body.question)
     history = await _load_history(db, thread.id)
+    doc_ids = await _resolve_document_scope(
+        db,
+        workspace_id=workspace_id,
+        user=user,
+        role=member.role,
+        thread_id=thread.id,
+        document_ids=body.document_ids,
+    )
 
     user_msg = ChatMessage(thread_id=thread.id, role=MessageRole.USER, content=body.question)
     db.add(user_msg)
@@ -139,7 +258,7 @@ async def chat_query(
         db,
         workspace_id=workspace_id,
         question=body.question,
-        document_ids=body.document_ids,
+        document_ids=doc_ids,
         history=history,
         use_hyde=body.use_hyde,
         use_rerank=body.use_rerank,
@@ -154,26 +273,29 @@ async def chat_query(
         token_usage={"retrieved": result.retrieved_count},
     )
     db.add(assistant)
+    await db.flush()
+    await chat_service.persist_citations(
+        db, message_id=assistant.id, citations=result.citations
+    )
 
     user.queries_today = (user.queries_today or 0) + 1
-    db.add(
-        UsageEvent(
-            user_id=user.id,
-            workspace_id=workspace_id,
-            event_type="query",
-            quantity=1,
-            meta={"latency_ms": result.latency_ms},
-        )
+    await billing_service.record_usage(
+        db,
+        user_id=user.id,
+        workspace_id=workspace_id,
+        event_type="query",
+        quantity=1,
+        meta={"latency_ms": result.latency_ms},
+        meter_key="query",
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            workspace_id=workspace_id,
-            action="chat.query",
-            resource_type="thread",
-            resource_id=str(thread.id),
-            details={"question_len": len(body.question)},
-        )
+    await write_audit(
+        db,
+        action="chat.query",
+        resource_type="thread",
+        resource_id=thread.id,
+        user_id=user.id,
+        workspace_id=workspace_id,
+        details={"question_len": len(body.question)},
     )
 
     if thread.title == "New conversation":
@@ -191,18 +313,31 @@ async def chat_query(
 
 @router.post("/workspaces/{workspace_id}/chat/stream")
 async def chat_stream(
-    workspace_id: UUID, body: ChatQueryRequest, db: DbSession, user: CurrentUser
+    workspace_id: UUID,
+    body: ChatQueryRequest,
+    db: DbSession,
+    user: CurrentUser,
+    access: RequireEditor,
 ) -> StreamingResponse:
-    await _require_member(db, workspace_id, user.id)
-    await check_query_quota(user, db)
+    await billing_service.check_query_quota_metered(
+        db, user=user, workspace_id=workspace_id
+    )
+    _, member = access
 
     thread = await _get_or_create_thread(db, workspace_id, user.id, body.thread_id, body.question)
     history = await _load_history(db, thread.id)
+    doc_ids = await _resolve_document_scope(
+        db,
+        workspace_id=workspace_id,
+        user=user,
+        role=member.role,
+        thread_id=thread.id,
+        document_ids=body.document_ids,
+    )
 
     user_msg = ChatMessage(thread_id=thread.id, role=MessageRole.USER, content=body.question)
     db.add(user_msg)
     await db.flush()
-    # Commit early so stream generator can open a fresh session if needed
     await db.commit()
 
     thread_id = thread.id
@@ -223,7 +358,7 @@ async def chat_stream(
                 session,
                 workspace_id=workspace_id,
                 question=body.question,
-                document_ids=body.document_ids,
+                document_ids=doc_ids,
                 history=history,
                 use_hyde=body.use_hyde,
                 use_rerank=body.use_rerank,
@@ -248,17 +383,21 @@ async def chat_stream(
                 token_usage={"retrieved": retrieved},
             )
             session.add(assistant)
+            await session.flush()
+            await chat_service.persist_citations(
+                session, message_id=assistant.id, citations=citations_payload
+            )
 
             u = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
             u.queries_today = (u.queries_today or 0) + 1
-            session.add(
-                UsageEvent(
-                    user_id=user_id,
-                    workspace_id=workspace_id,
-                    event_type="query",
-                    quantity=1,
-                    meta={"latency_ms": latency_ms, "stream": True},
-                )
+            await billing_service.record_usage(
+                session,
+                user_id=user_id,
+                workspace_id=workspace_id,
+                event_type="query",
+                quantity=1,
+                meta={"latency_ms": latency_ms, "stream": True},
+                meter_key="query",
             )
             t = (
                 await session.execute(select(ChatThread).where(ChatThread.id == thread_id))
@@ -296,8 +435,8 @@ async def message_feedback(
     body: FeedbackRequest,
     db: DbSession,
     user: CurrentUser,
+    _access: RequireViewer,
 ) -> ChatMessage:
-    await _require_member(db, workspace_id, user.id)
     msg = (
         await db.execute(
             select(ChatMessage).where(
@@ -308,8 +447,47 @@ async def message_feedback(
     if not msg:
         raise NotFoundError("Message not found")
     msg.feedback = body.feedback
+    await chat_service.upsert_feedback(
+        db,
+        message_id=message_id,
+        user_id=user.id,
+        vote=FeedbackVote(body.feedback),
+    )
     await db.flush()
     return msg
+
+
+@router.post(
+    "/workspaces/{workspace_id}/threads/{thread_id}/messages/{message_id}/feedback/v2",
+    response_model=MessageFeedbackOut,
+)
+async def message_feedback_v2(
+    workspace_id: UUID,
+    thread_id: UUID,
+    message_id: UUID,
+    body: MessageFeedbackCreate,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireViewer,
+) -> MessageFeedbackOut:
+    msg = (
+        await db.execute(
+            select(ChatMessage).where(
+                ChatMessage.id == message_id, ChatMessage.thread_id == thread_id
+            )
+        )
+    ).scalar_one_or_none()
+    if not msg:
+        raise NotFoundError("Message not found")
+    msg.feedback = body.vote.value
+    row = await chat_service.upsert_feedback(
+        db,
+        message_id=message_id,
+        user_id=user.id,
+        vote=body.vote,
+        comment=body.comment,
+    )
+    return MessageFeedbackOut.model_validate(row)
 
 
 async def _get_or_create_thread(

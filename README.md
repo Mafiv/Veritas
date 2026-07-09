@@ -85,12 +85,30 @@ Opinionated **archival ink + signal teal** identity — Space Grotesk (display) 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/v1/auth/register` | Create account + personal workspace |
-| POST | `/api/v1/auth/login` | JWT login |
+| POST | `/api/v1/auth/login` | JWT login (+ refresh token, login history) |
+| POST | `/api/v1/auth/refresh` | Rotate refresh token |
+| POST | `/api/v1/auth/logout` | Revoke refresh token |
 | GET | `/api/v1/workspaces` | List workspaces |
-| POST | `/api/v1/workspaces/{id}/documents` | Upload document |
+| GET/POST/PATCH/DELETE | `/api/v1/workspaces/{id}/members` | Member management (owner) |
+| POST | `/api/v1/workspaces/{id}/invitations` | Invite by email |
+| POST | `/api/v1/invitations/{token}/accept` | Accept invitation |
+| POST | `/api/v1/workspaces/{id}/api-keys` | Create workspace API key (`vtk_…`) |
+| POST | `/api/v1/workspaces/{id}/documents` | Upload document (+ ingestion job) |
+| GET | `/api/v1/workspaces/{id}/documents/{doc}/status` | Ingestion job status |
+| GET | `/api/v1/workspaces/{id}/documents/{doc}/versions` | Document versions |
+| GET | `/api/v1/workspaces/{id}/documents/{doc}/questions` | Suggested questions |
+| GET | `/api/v1/workspaces/{id}/documents/{doc}/entities` | Extracted entities |
+| GET/POST | `/api/v1/workspaces/{id}/collections` | Document collections |
 | POST | `/api/v1/workspaces/{id}/chat/stream` | SSE grounded Q&A |
+| POST | `/api/v1/workspaces/{id}/threads/{tid}/comments` | Thread comments |
+| GET | `/api/v1/workspaces/{id}/audit-logs` | Audit log (owner) |
+| GET | `/api/v1/notifications` | In-app notifications |
+| GET | `/api/v1/billing/plans` | Plans from DB |
 | GET | `/api/v1/billing/usage` | Plan usage meters |
+| GET | `/api/v1/billing/invoices` | Local invoice history |
 | POST | `/api/v1/billing/checkout` | Stripe (or mock) upgrade |
+| POST | `/api/v1/workspaces/{id}/shared-links` | Expiring share links |
+| POST | `/api/v1/workspaces/{id}/webhooks` | Outbound webhooks (owner) |
 
 ## Tests
 

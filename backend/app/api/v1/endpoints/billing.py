@@ -1,6 +1,8 @@
-"""Billing endpoints — Stripe checkout, portal, webhooks, usage."""
+"""Billing endpoints — Stripe checkout, portal, webhooks, usage, plans, invoices."""
 
 from __future__ import annotations
+
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, Request
 from sqlalchemy import func, select
@@ -8,23 +10,31 @@ from sqlalchemy import func, select
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.exceptions import VeritasError
-from app.models.domain import Document, DocumentChunk, PlanTier, UsageEvent, Workspace
+from app.models.domain import Document, DocumentChunk, PlanTier, SubscriptionStatus, Workspace
 from app.models.schemas import CheckoutRequest, UsageStats
-from app.services.payment.stripe_client import StripeClient, plan_limits
+from app.models.schemas.extended import InvoiceOut, PlanOut, SubscriptionOut
+from app.services.billing import service as billing_service
+from app.services.payment.stripe_client import StripeClient
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 stripe_client = StripeClient()
 
 
+@router.get("/plans", response_model=list[PlanOut])
+async def list_plans(db: DbSession) -> list[PlanOut]:
+    plans = await billing_service.list_plans(db)
+    return [PlanOut.model_validate(p) for p in plans]
+
+
 @router.get("/usage", response_model=UsageStats)
 async def usage_stats(db: DbSession, user: CurrentUser) -> UsageStats:
-    limits = plan_limits(user.plan)
+    limits = await billing_service.plan_limits_from_db(db, user.plan)
     docs = (
         await db.execute(
             select(func.count())
             .select_from(Document)
             .join(Workspace, Workspace.id == Document.workspace_id)
-            .where(Workspace.owner_id == user.id)
+            .where(Workspace.owner_id == user.id, Document.deleted_at.is_(None))
         )
     ).scalar_one()
     workspaces = (
@@ -52,6 +62,29 @@ async def usage_stats(db: DbSession, user: CurrentUser) -> UsageStats:
     )
 
 
+@router.get("/invoices", response_model=list[InvoiceOut])
+async def list_invoices(db: DbSession, user: CurrentUser) -> list[InvoiceOut]:
+    rows = await billing_service.list_invoices(db, user.id)
+    return [InvoiceOut.model_validate(r) for r in rows]
+
+
+@router.get("/subscription", response_model=SubscriptionOut | None)
+async def get_subscription(db: DbSession, user: CurrentUser) -> SubscriptionOut | None:
+    from app.models.domain import Subscription
+
+    sub = (
+        await db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user.id)
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not sub:
+        return None
+    return SubscriptionOut.model_validate(sub)
+
+
 @router.post("/checkout")
 async def create_checkout(body: CheckoutRequest, db: DbSession, user: CurrentUser) -> dict:
     if body.plan == PlanTier.FREE:
@@ -65,10 +98,13 @@ async def create_checkout(body: CheckoutRequest, db: DbSession, user: CurrentUse
         cancel_url=f"{settings.frontend_url}/settings?checkout=cancel",
         client_reference_id=str(user.id),
     )
-    # Mock upgrade path for local development
     if session.get("mock"):
-        user.plan = body.plan
-        await db.flush()
+        await billing_service.upsert_subscription(
+            db,
+            user=user,
+            plan_code=body.plan,
+            status=SubscriptionStatus.ACTIVE,
+        )
     return session
 
 
@@ -82,7 +118,6 @@ async def stripe_webhook(
     settings = get_settings()
 
     if not settings.stripe_secret_key:
-        # Accept mock events in development
         return {"received": True, "mock": True}
 
     if not stripe_signature:
@@ -104,22 +139,77 @@ async def stripe_webhook(
             result = await db.execute(select(User).where(User.id == UUID(user_id)))
             user = result.scalar_one_or_none()
             if user:
-                user.stripe_customer_id = session.get("customer")
-                user.stripe_subscription_id = session.get("subscription")
-                # Default to pro unless metadata says otherwise
-                user.plan = PlanTier.PRO
-                await db.flush()
+                plan = PlanTier.PRO
+                meta = session.get("metadata") or {}
+                if meta.get("plan") == "team":
+                    plan = PlanTier.TEAM
+                sub = await billing_service.upsert_subscription(
+                    db,
+                    user=user,
+                    plan_code=plan,
+                    stripe_customer_id=session.get("customer"),
+                    stripe_subscription_id=session.get("subscription"),
+                    status=SubscriptionStatus.ACTIVE,
+                )
+                if session.get("invoice"):
+                    await billing_service.record_invoice(
+                        db,
+                        user_id=user.id,
+                        subscription_id=sub.id,
+                        stripe_invoice_id=str(session.get("invoice")),
+                        status="paid",
+                        paid_at=datetime.now(timezone.utc),
+                    )
+
+    elif event["type"] == "invoice.paid":
+        inv = event["data"]["object"]
+        from uuid import UUID
+
+        from app.models.domain import Subscription, User
+
+        customer = inv.get("customer")
+        user = None
+        if customer:
+            user = (
+                await db.execute(select(User).where(User.stripe_customer_id == customer))
+            ).scalar_one_or_none()
+        if user:
+            sub = (
+                await db.execute(
+                    select(Subscription)
+                    .where(Subscription.user_id == user.id)
+                    .order_by(Subscription.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            await billing_service.record_invoice(
+                db,
+                user_id=user.id,
+                subscription_id=sub.id if sub else None,
+                stripe_invoice_id=inv.get("id") or f"inv_{user.id}",
+                status=inv.get("status") or "paid",
+                amount_due_cents=int(inv.get("amount_due") or 0),
+                amount_paid_cents=int(inv.get("amount_paid") or 0),
+                currency=inv.get("currency") or "usd",
+                hosted_invoice_url=inv.get("hosted_invoice_url"),
+                paid_at=datetime.now(timezone.utc),
+            )
 
     elif event["type"] == "customer.subscription.deleted":
-        sub = event["data"]["object"]
+        sub_obj = event["data"]["object"]
         from app.models.domain import User
 
         result = await db.execute(
-            select(User).where(User.stripe_subscription_id == sub.get("id"))
+            select(User).where(User.stripe_subscription_id == sub_obj.get("id"))
         )
         user = result.scalar_one_or_none()
         if user:
-            user.plan = PlanTier.FREE
+            await billing_service.upsert_subscription(
+                db,
+                user=user,
+                plan_code=PlanTier.FREE,
+                status=SubscriptionStatus.CANCELED,
+            )
             user.stripe_subscription_id = None
             await db.flush()
 
