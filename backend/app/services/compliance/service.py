@@ -18,74 +18,14 @@ from app.models.domain import (
     ExportJob,
     ExportJobStatus,
     ExportJobType,
-    SsoConnection,
-    SsoProvider,
     User,
     Workspace,
 )
+from app.services.identity import sso as sso_service
 
-
-async def upsert_sso(
-    db: AsyncSession,
-    *,
-    workspace_id: UUID,
-    provider: str | SsoProvider,
-    issuer_url: str | None = None,
-    client_id: str | None = None,
-    client_secret: str | None = None,
-    domains: list[str] | None = None,
-    is_enforced: bool = False,
-) -> SsoConnection:
-    if isinstance(provider, str):
-        provider = SsoProvider(provider)
-    existing = (
-        await db.execute(
-            select(SsoConnection).where(
-                SsoConnection.workspace_id == workspace_id,
-                SsoConnection.provider == provider,
-                SsoConnection.deleted_at.is_(None),
-            )
-        )
-    ).scalar_one_or_none()
-    if existing:
-        existing.issuer_url = issuer_url
-        existing.client_id = client_id
-        if client_secret:
-            # App-layer "encryption" placeholder — store opaque; real KMS later
-            existing.client_secret_encrypted = f"enc:{client_secret}"
-        existing.domains = domains or []
-        existing.is_enforced = is_enforced
-        existing.is_active = True
-        await db.flush()
-        return existing
-    row = SsoConnection(
-        workspace_id=workspace_id,
-        provider=provider,
-        issuer_url=issuer_url,
-        client_id=client_id,
-        client_secret_encrypted=f"enc:{client_secret}" if client_secret else None,
-        domains=domains or [],
-        is_enforced=is_enforced,
-        is_active=True,
-    )
-    db.add(row)
-    await db.flush()
-    return row
-
-
-async def list_sso(db: AsyncSession, workspace_id: UUID) -> list[SsoConnection]:
-    return list(
-        (
-            await db.execute(
-                select(SsoConnection).where(
-                    SsoConnection.workspace_id == workspace_id,
-                    SsoConnection.deleted_at.is_(None),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
+upsert_sso = sso_service.upsert_sso
+list_sso = sso_service.list_sso
+soft_delete_sso = sso_service.soft_delete_sso
 
 
 async def upsert_retention(

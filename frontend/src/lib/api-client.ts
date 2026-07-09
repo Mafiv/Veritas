@@ -255,6 +255,43 @@ export interface SsoConnection {
   domains: string[];
   is_enforced: boolean;
   is_active: boolean;
+  metadata_xml?: string | null;
+}
+
+export interface NotificationPreference {
+  id: string;
+  event_type: string;
+  channel: string;
+  enabled: boolean;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  endpoint_id: string;
+  event_type: string;
+  status: string;
+  http_status?: number | null;
+  attempt_count: number;
+  created_at: string;
+  delivered_at?: string | null;
+}
+
+export interface SharePreview {
+  id: string;
+  workspace_id: string;
+  resource_type: string;
+  resource_id: string;
+  view_count: number;
+  allow_download: boolean;
+  expires_at?: string | null;
+  preview: Record<string, unknown>;
+}
+
+export interface SsoDiscover {
+  sso_available: boolean;
+  provider?: string | null;
+  enforced: boolean;
+  authorize_url?: string | null;
 }
 
 class ApiError extends Error {
@@ -497,6 +534,17 @@ export const api = {
     request<{ ok: boolean; marked: number }>("/notifications/read-all", {
       method: "POST",
     }),
+  listNotificationPreferences: () =>
+    request<NotificationPreference[]>("/notifications/preferences"),
+  updateNotificationPreference: (body: {
+    event_type: string;
+    channel: string;
+    enabled: boolean;
+  }) =>
+    request<NotificationPreference>("/notifications/preferences", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 
   // Audit
   listAuditLogs: (workspaceId: string) =>
@@ -512,6 +560,7 @@ export const api = {
       resource_id: string;
       expires_at?: string;
       allow_download?: boolean;
+      password?: string;
     },
   ) =>
     request<SharedLink>(`/workspaces/${workspaceId}/shared-links`, {
@@ -523,20 +572,28 @@ export const api = {
       `/workspaces/${workspaceId}/shared-links/${linkId}`,
       { method: "DELETE" },
     ),
+  resolveShare: (token: string, password?: string) =>
+    request<SharePreview>(
+      `/share/${token}${password ? `?password=${encodeURIComponent(password)}` : ""}`,
+    ),
   listWebhooks: (workspaceId: string) =>
     request<WebhookEndpoint[]>(`/workspaces/${workspaceId}/webhooks`),
   createWebhook: (
     workspaceId: string,
     body: { url: string; event_types: string[]; description?: string },
   ) =>
-    request<WebhookEndpoint>(`/workspaces/${workspaceId}/webhooks`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+    request<WebhookEndpoint & { secret?: string }>(
+      `/workspaces/${workspaceId}/webhooks`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   deleteWebhook: (workspaceId: string, endpointId: string) =>
     request<{ ok: boolean }>(
       `/workspaces/${workspaceId}/webhooks/${endpointId}`,
       { method: "DELETE" },
+    ),
+  listWebhookDeliveries: (workspaceId: string, endpointId: string) =>
+    request<WebhookDelivery[]>(
+      `/workspaces/${workspaceId}/webhooks/${endpointId}/deliveries`,
     ),
 
   // Compliance
@@ -577,12 +634,31 @@ export const api = {
       client_secret?: string;
       domains?: string[];
       is_enforced?: boolean;
+      metadata_xml?: string;
+      is_active?: boolean;
     },
   ) =>
     request<SsoConnection>(`/workspaces/${workspaceId}/sso`, {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+  deleteSsoConnection: (workspaceId: string, provider: string) =>
+    request<{ ok: boolean }>(`/workspaces/${workspaceId}/sso/${provider}`, {
+      method: "DELETE",
+    }),
+
+  // SSO auth
+  ssoDiscover: (email: string) =>
+    request<SsoDiscover>(`/auth/sso/discover?email=${encodeURIComponent(email)}`),
+  ssoStart: (body: {
+    email?: string;
+    workspace_id?: string;
+    provider?: string;
+  }) =>
+    request<{ authorize_url: string; provider: string; mock?: string }>(
+      "/auth/sso/start",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
 };
 
 export { ApiError, API_BASE };

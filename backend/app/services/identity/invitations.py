@@ -86,6 +86,20 @@ async def create_invitation(
             f"This link expires at {invitation.expires_at.isoformat()}."
         ),
     )
+    # In-app notification if invitee already has an account
+    if existing_user:
+        from app.services.notifications.service import notify_user
+
+        await notify_user(
+            db,
+            user_id=existing_user.id,
+            workspace_id=workspace_id,
+            type="invitation.received",
+            title=f"Invited to {ws.name}",
+            body=f"You've been invited as {role.value}.",
+            link_url="/settings",
+            meta={"invitation_id": str(invitation.id)},
+        )
     await write_audit(
         db,
         action="workspace.invitation.create",
@@ -164,6 +178,19 @@ async def accept_invitation(
         workspace_id=invitation.workspace_id,
         details={"role": invitation.role.value},
     )
+    if invitation.invited_by:
+        from app.services.notifications.service import notify_user
+
+        await notify_user(
+            db,
+            user_id=invitation.invited_by,
+            workspace_id=invitation.workspace_id,
+            type="invitation.accepted",
+            title="Invitation accepted",
+            body=f"{user.email} joined the workspace.",
+            link_url="/settings",
+            meta={"invitation_id": str(invitation.id)},
+        )
     return member
 
 

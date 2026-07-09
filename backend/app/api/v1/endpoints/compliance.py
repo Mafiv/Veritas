@@ -54,6 +54,8 @@ async def upsert_sso(
         client_secret=body.client_secret,
         domains=body.domains,
         is_enforced=body.is_enforced,
+        metadata_xml=body.metadata_xml,
+        is_active=body.is_active,
     )
     await write_audit(
         db,
@@ -65,6 +67,28 @@ async def upsert_sso(
         details={"provider": body.provider},
     )
     return SsoConnectionOut.model_validate(row)
+
+
+@router.delete("/workspaces/{workspace_id}/sso/{provider}")
+async def delete_sso(
+    workspace_id: UUID,
+    provider: str,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireOwner,
+) -> dict:
+    await compliance_service.soft_delete_sso(
+        db, workspace_id=workspace_id, provider=provider
+    )
+    await write_audit(
+        db,
+        action="sso.delete",
+        resource_type="sso_connection",
+        user_id=user.id,
+        workspace_id=workspace_id,
+        details={"provider": provider},
+    )
+    return {"ok": True}
 
 
 @router.get(

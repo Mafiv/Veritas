@@ -44,7 +44,25 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 ```
 
-Set `USE_MOCK_LLM=true` (default) to run without an OpenAI key. Set `OPENAI_API_KEY` and `USE_MOCK_LLM=false` for real embeddings/chat.
+Set `USE_MOCK_LLM=true` (default) to run without any LLM API keys. Set `USE_MOCK_LLM=false` and configure a provider for real chat completions (embeddings still use `OPENAI_API_KEY` separately).
+
+### Switching LLM providers
+
+Chat completions are routed through [LiteLLM](https://docs.litellm.ai/). Switch providers by changing `LLM_MODEL` and the matching API key in `backend/.env` — no code changes required.
+
+| Provider | `LLM_MODEL` example | API key env var |
+|----------|-------------------|-----------------|
+| OpenAI | `openai/gpt-4o` | `OPENAI_API_KEY` |
+| Google Gemini | `gemini/gemini-1.5-pro` | `GEMINI_API_KEY` |
+| GitHub Models | `github/gpt-4o-mini` | `GITHUB_API_KEY` (GitHub PAT; free tier, rate-limited — good for local testing) |
+| Anthropic | `anthropic/claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
+
+```bash
+# Example: Gemini
+LLM_MODEL=gemini/gemini-1.5-pro
+GEMINI_API_KEY=your-key-here
+USE_MOCK_LLM=false
+```
 
 ### 3. Frontend
 
@@ -110,11 +128,19 @@ Opinionated **archival ink + signal teal** identity — Space Grotesk (display) 
 | POST | `/api/v1/workspaces/{id}/shared-links` | Expiring share links |
 | POST | `/api/v1/workspaces/{id}/webhooks` | Outbound webhooks (owner) |
 | PUT | `/api/v1/workspaces/{id}/sso` | SSO connection config (owner) |
+| DELETE | `/api/v1/workspaces/{id}/sso/{provider}` | Soft-delete SSO connection |
+| GET | `/api/v1/auth/sso/discover` | Discover SSO for email domain |
+| POST | `/api/v1/auth/sso/start` | Start OIDC/SAML authorize redirect |
+| GET | `/api/v1/auth/sso/oidc/callback` | OIDC callback → frontend tokens |
+| POST | `/api/v1/auth/sso/saml/acs` | SAML ACS |
+| GET/PUT | `/api/v1/notifications/preferences` | Notification channel preferences |
+| GET | `/api/v1/workspaces/{id}/webhooks/{ep}/deliveries` | Webhook delivery log |
 | PUT | `/api/v1/workspaces/{id}/retention-policies` | Retention policy upsert |
 | POST | `/api/v1/exports` | GDPR / workspace export job |
 | GET | `/health/retrieval` | Retrieval / pgvector introspection |
 
-Product phases (schema → services → UI → jobs → retrieval → compliance → hardening) are documented in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Product phases and Domain 7/SSO/pgvector notes: [`docs/ROADMAP.md`](docs/ROADMAP.md).  
+Schema: [`docs/SCHEMA.md`](docs/SCHEMA.md). Apply `alembic upgrade head` for migration `008_pgvector`.
 
 ## Tests
 

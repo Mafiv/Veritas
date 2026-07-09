@@ -8,7 +8,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     app_name: str = "Veritas"
     app_env: Literal["development", "staging", "production"] = "development"
@@ -35,7 +40,14 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = ""
 
     # LLM / embeddings
+    llm_provider_model: str = Field(
+        default="openai/gpt-4o-mini",
+        validation_alias="LLM_MODEL",
+    )
     openai_api_key: str = ""
+    gemini_api_key: str = ""
+    github_api_key: str = ""
+    anthropic_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
@@ -79,6 +91,13 @@ class Settings(BaseSettings):
     use_pgvector: bool = False
     reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    # SSO / OIDC / SAML
+    use_mock_sso: bool = True  # local IdP simulation without real OIDC provider
+    sso_callback_base_url: str = ""  # defaults to frontend_url when empty
+    sso_state_ttl_seconds: int = 600
+    sso_jit_default_role: Literal["viewer", "editor"] = "viewer"
+    webhook_max_attempts: int = 5
 
 
 @lru_cache

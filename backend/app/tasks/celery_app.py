@@ -44,5 +44,9 @@ celery_app.conf.update(
             "task": "app.tasks.webhook_tasks.run_retention_purge_all",
             "schedule": 60 * 60 * 24,
         },
+        "pgvector-backfill-hourly": {
+            "task": "app.tasks.webhook_tasks.backfill_pgvector",
+            "schedule": 60 * 60,
+        },
     },
 )

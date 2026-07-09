@@ -235,6 +235,29 @@ async def remove_from_collection(
         await db.flush()
 
 
+async def soft_delete_collection(
+    db: AsyncSession, *, collection_id: UUID, workspace_id: UUID
+) -> None:
+    from datetime import datetime, timezone
+
+    col = await get_collection(db, collection_id)
+    if not col or col.workspace_id != workspace_id:
+        raise NotFoundError("Collection not found")
+    col.deleted_at = datetime.now(timezone.utc)
+    await db.flush()
+
+
+async def list_collection_document_ids(
+    db: AsyncSession, collection_id: UUID
+) -> list[UUID]:
+    result = await db.execute(
+        select(CollectionDocument.document_id).where(
+            CollectionDocument.collection_id == collection_id
+        )
+    )
+    return list(result.scalars().all())
+
+
 async def get_collection(db: AsyncSession, collection_id: UUID) -> Collection | None:
     return (
         await db.execute(

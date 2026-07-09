@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.models.domain import Document, DocumentChunk
 from app.services.ingestion.embedder import Embedder, cosine_similarity
+from app.services.retrieval import pgvector as pgvector_svc
 
 
 @dataclass
@@ -105,6 +106,48 @@ class HybridSearcher:
         top_k: int | None = None,
     ) -> list[ScoredChunk]:
         top_k = top_k or self.settings.retrieval_top_k
+        if query_embedding is None:
+            query_embedding = await self.embedder.embed_query(query)
+
+        # Prefer native pgvector ANN for vector ranking when enabled
+        if pgvector_svc.pgvector_enabled():
+            pg_hits = await pgvector_svc.vector_search_ids(
+                db,
+                workspace_id=workspace_id,
+                query_embedding=query_embedding,
+                document_ids=document_ids,
+                limit=max(top_k * 3, 40),
+            )
+            if pg_hits:
+                return await self._fuse_with_pgvector(
+                    db,
+                    workspace_id=workspace_id,
+                    query=query,
+                    query_embedding=query_embedding,
+                    document_ids=document_ids,
+                    pg_hits=pg_hits,
+                    top_k=top_k,
+                )
+
+        return await self._search_json(
+            db,
+            workspace_id=workspace_id,
+            query=query,
+            query_embedding=query_embedding,
+            document_ids=document_ids,
+            top_k=top_k,
+        )
+
+    async def _search_json(
+        self,
+        db: AsyncSession,
+        *,
+        workspace_id: UUID,
+        query: str,
+        query_embedding: Sequence[float],
+        document_ids: list[UUID] | None,
+        top_k: int,
+    ) -> list[ScoredChunk]:
         stmt = (
             select(DocumentChunk, Document)
             .join(Document, Document.id == DocumentChunk.document_id)
@@ -126,10 +169,6 @@ class HybridSearcher:
         documents = {r[0].id: r[1] for r in rows}
         corpus = [c.content for c in chunks]
 
-        if query_embedding is None:
-            query_embedding = await self.embedder.embed_query(query)
-
-        # Vector ranking
         vector_scores = [
             cosine_similarity(query_embedding, c.embedding or []) for c in chunks
         ]
@@ -137,9 +176,85 @@ class HybridSearcher:
             range(len(chunks)), key=lambda i: vector_scores[i], reverse=True
         )
 
-        # BM25 ranking
         bm25 = BM25Index()
         bm25.fit(corpus)
+        bm25_scores = bm25.score(query)
+        bm25_ranked = sorted(
+            range(len(chunks)), key=lambda i: bm25_scores[i], reverse=True
+        )
+
+        fused = reciprocal_rank_fusion(
+            [vector_ranked, bm25_ranked],
+            weights=[
+                self.settings.hybrid_vector_weight,
+                self.settings.hybrid_bm25_weight,
+            ],
+        )
+        ordered = sorted(fused.items(), key=lambda x: x[1], reverse=True)[:top_k]
+
+        results: list[ScoredChunk] = []
+        for idx, score in ordered:
+            chunk = chunks[idx]
+            results.append(
+                ScoredChunk(
+                    chunk=chunk,
+                    document=documents[chunk.id],
+                    score=score,
+                    vector_score=vector_scores[idx],
+                    bm25_score=bm25_scores[idx],
+                )
+            )
+        return results
+
+    async def _fuse_with_pgvector(
+        self,
+        db: AsyncSession,
+        *,
+        workspace_id: UUID,
+        query: str,
+        query_embedding: Sequence[float],
+        document_ids: list[UUID] | None,
+        pg_hits: list[tuple[UUID, float]],
+        top_k: int,
+    ) -> list[ScoredChunk]:
+        # Load candidate pool: pgvector top hits ∪ BM25 corpus (JSON path limited set)
+        hit_ids = [hid for hid, _ in pg_hits]
+        stmt = (
+            select(DocumentChunk, Document)
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .where(DocumentChunk.workspace_id == workspace_id)
+            .where(Document.deleted_at.is_(None))
+            .where(
+                (DocumentChunk.id.in_(hit_ids))
+                | (DocumentChunk.embedding.is_not(None))
+            )
+        )
+        if document_ids is not None:
+            stmt = stmt.where(DocumentChunk.document_id.in_(document_ids))
+        # Cap in-memory BM25 corpus for large workspaces
+        stmt = stmt.limit(max(500, top_k * 20))
+
+        rows = list((await db.execute(stmt)).all())
+        if not rows:
+            return []
+
+        chunks = [r[0] for r in rows]
+        documents = {r[0].id: r[1] for r in rows}
+
+        pg_scores = {hid: score for hid, score in pg_hits}
+        vector_scores = [
+            pg_scores.get(
+                c.id,
+                cosine_similarity(query_embedding, c.embedding or []),
+            )
+            for c in chunks
+        ]
+        vector_ranked = sorted(
+            range(len(chunks)), key=lambda i: vector_scores[i], reverse=True
+        )
+
+        bm25 = BM25Index()
+        bm25.fit([c.content for c in chunks])
         bm25_scores = bm25.score(query)
         bm25_ranked = sorted(
             range(len(chunks)), key=lambda i: bm25_scores[i], reverse=True

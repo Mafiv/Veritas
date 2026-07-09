@@ -54,9 +54,17 @@ Services + endpoints for members, invitations, API keys, audit, ingestion jobs, 
 - Unit tests for compliance / webhook delivery helpers
 - Config knobs for SMTP, pgvector, reranker backend
 
-### Still optional later
+## Still optional later
 
-- Full OIDC/SAML browser login against `sso_connections`
-- Native `vector` column + IVFFlat index migration
-- Real MiniLM weights in production images
+- Production IdP hardening (Authlib discovery cache, python3-saml XML validation)
 - Breaking cleanup of legacy `users.plan` / JSON citation columns
+- Real MiniLM weights in production images
+
+## Domain 7 + SSO + pgvector (this branch)
+
+- Notification preferences CRUD + preference-aware notify
+- Webhook HMAC signing, retries, delivery list API, Celery beat service
+- Collections delete + document list; chat `collection_id` scope
+- Full OIDC/SAML login UI (mock IdP + real token exchange path)
+- Alembic `008_pgvector` + dual-write/read hybrid search
+

@@ -146,6 +146,7 @@ class ChatQueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     thread_id: Optional[UUID] = None
     document_ids: Optional[list[UUID]] = None
+    collection_id: Optional[UUID] = None
     use_hyde: bool = True
     use_rerank: bool = True
 
