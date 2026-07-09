@@ -39,15 +39,17 @@ export function MessageList({
   messages,
   citations,
   workspaceId,
+  isStreaming,
   onSelectCitation,
 }: {
   messages: ChatMessageLocal[];
   citations: Citation[];
   workspaceId: string;
+  isStreaming?: boolean;
   onSelectCitation: (c: Citation) => void;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-7 px-5 py-8">
       {messages.map((m) => (
         <MessageBubble
           key={m.id}
@@ -57,6 +59,16 @@ export function MessageList({
           onSelectCitation={onSelectCitation}
         />
       ))}
+      {isStreaming && messages[messages.length - 1]?.streaming && (
+        <div className="animate-fade-in flex items-center gap-2 px-1 text-xs text-slate">
+          <span className="typing-dots" aria-hidden>
+            <span />
+            <span />
+            <span />
+          </span>
+          Searching sources and writing…
+        </div>
+      )}
     </div>
   );
 }
@@ -77,8 +89,17 @@ function MessageBubble({
 
   const body = useMemo(() => {
     if (isUser) return message.content;
+    if (!message.content && message.streaming) {
+      return (
+        <span className="typing-dots inline-flex items-center py-1" aria-label="Thinking">
+          <span />
+          <span />
+          <span />
+        </span>
+      );
+    }
     return renderWithCitations(message.content, citations, onSelectCitation);
-  }, [message.content, citations, isUser, onSelectCitation]);
+  }, [message.content, message.streaming, citations, isUser, onSelectCitation]);
 
   async function sendFeedback(value: "up" | "down") {
     if (!message.thread_id || message.id.startsWith("temp-")) return;
@@ -99,16 +120,16 @@ function MessageBubble({
     >
       <div
         className={cn(
-          "max-w-[92%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap",
+          "max-w-[92%] rounded-2xl px-4 py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap",
           isUser
             ? "bg-ink text-primary-foreground"
-            : "bg-white border border-line shadow-soft text-ink",
-          message.streaming && !isUser && "stream-caret",
+            : "border border-line bg-white text-ink shadow-soft",
+          message.streaming && message.content && !isUser && "stream-caret",
         )}
       >
         {body}
       </div>
-      {!isUser && !message.streaming && (
+      {!isUser && !message.streaming && message.content && (
         <div className="flex items-center gap-1 px-1">
           <Button
             variant="ghost"
