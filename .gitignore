@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+.next/
+out/
+storage/
+backend/storage/
+*.log
+.env
+.env.local
+.DS_Store
+*.sqlite3
+.turbo/
+coverage/

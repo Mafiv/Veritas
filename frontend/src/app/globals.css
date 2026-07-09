@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+/*
+  Veritas design tokens
+  Direction: cool archival ink + signal teal — precision, evidence, clarity.
+  Not cream/serif, not purple glow, not default zinc.
+*/
+
+:root {
+  /* Brand palette */
+  --ink: #0c2428;
+  --ink-soft: #1a3a40;
+  --mist: #e7eef0;
+  --paper: #f4f8f9;
+  --signal: #0f9f8a;
+  --signal-deep: #0b7a6a;
+  --signal-soft: #d5f3ed;
+  --slate: #5c7378;
+  --line: #c9d6da;
+  --danger: #c0392b;
+  --warning: #b86e00;
+  --success: #1a7a52;
+
+  /* Semantic mapped to shadcn-style vars */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: #ffffff;
+  --card-foreground: var(--ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: #f4f8f9;
+  --secondary: var(--mist);
+  --secondary-foreground: var(--ink-soft);
+  --muted: #eef3f4;
+  --muted-foreground: var(--slate);
+  --accent: var(--signal-soft);
+  --accent-foreground: var(--signal-deep);
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--signal);
+  --radius: 0.625rem;
+
+  --shadow-soft: 0 1px 2px rgb(12 36 40 / 0.04), 0 8px 24px rgb(12 36 40 / 0.06);
+  --shadow-lift: 0 2px 8px rgb(12 36 40 / 0.08), 0 16px 40px rgb(12 36 40 / 0.08);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-mist: var(--mist);
+  --color-paper: var(--paper);
+  --color-signal: var(--signal);
+  --color-signal-deep: var(--signal-deep);
+  --color-signal-soft: var(--signal-soft);
+  --color-slate: var(--slate);
+  --color-line: var(--line);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgb(15 159 138 / 0.10), transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, rgb(12 36 40 / 0.06), transparent 50%),
+      linear-gradient(180deg, #eef4f5 0%, var(--paper) 40%, #eef3f4 100%);
+    color: var(--foreground);
+    font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.03em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .veritas-grid {
+    background-image:
+      linear-gradient(rgb(12 36 40 / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(12 36 40 / 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-lift {
+    box-shadow: var(--shadow-lift);
+  }
+
+  .citation-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.35rem;
+    margin: 0 0.15rem;
+    border-radius: 0.35rem;
+    background: var(--signal-soft);
+    color: var(--signal-deep);
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: super;
+    cursor: pointer;
+    transition: background 150ms ease, transform 150ms ease;
+  }
+
+  .citation-chip:hover {
+    background: var(--signal);
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  .stream-caret::after {
+    content: "";
+    display: inline-block;
+    width: 0.45em;
+    height: 1em;
+    margin-left: 2px;
+    background: var(--signal);
+    vertical-align: text-bottom;
+    animation: blink 1s steps(1) infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-rise {
+    animation: rise 400ms ease-out both;
+  }
+}
