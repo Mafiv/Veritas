@@ -49,8 +49,10 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 md:px-8">
-      <h1 className="font-display text-3xl font-semibold text-ink">Settings</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">
+        Settings
+      </h1>
+      <p className="mt-2 text-base text-slate">
         Profile, plan, and usage metering for your Veritas account.
       </p>
 
