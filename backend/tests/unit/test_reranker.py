@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.core.config import Settings, get_settings
 from app.services.retrieval.reranker import CrossEncoderReranker
 from app.services.retrieval.hybrid_search import ScoredChunk
 from app.services.llm.client import LLMClient
@@ -36,7 +37,12 @@ def test_reranker_prefers_overlapping_passage():
 
 
 @pytest.mark.asyncio
-async def test_mock_llm_grounded_answer():
+async def test_mock_llm_grounded_answer(monkeypatch: pytest.MonkeyPatch):
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        "app.services.llm.client.get_settings",
+        lambda: Settings(use_mock_llm=True),
+    )
     llm = LLMClient()
     text = await llm.complete(
         system="answer",

@@ -32,6 +32,8 @@ dependencies = [
     "structlog>=24.4.0",
     "tenacity>=9.0.0",
     "litellm>=1.55.0",
+    "PyJWT[crypto]>=2.8.0",
+    "cryptography>=42.0.0",
 ]
 
 [project.optional-dependencies]

@@ -43,7 +43,11 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable for Better Auth / OAuth users (password lives in Better Auth account table)
+    hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default="")
+    auth_user_id: Mapped[Optional[str]] = mapped_column(
+        String(128), unique=True, index=True, nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Legacy billing fields — source of truth moves to subscriptions/usage_meters.
     # Kept additive for backward compatibility until a breaking cleanup migration.

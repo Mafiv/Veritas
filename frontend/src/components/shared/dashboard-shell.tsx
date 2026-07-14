@@ -20,6 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { api, setToken, type UsageStats } from "@/lib/api-client";
+import { authClient } from "@/lib/auth-client";
 import { useAppStore, useChatStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
+        // Refresh Better Auth JWT for FastAPI if we have a session cookie
+        const { data } = await authClient.token();
+        if (data?.token) setToken(data.token);
+
         const me = await api.me();
         if (cancelled) return;
         setUser(me);
@@ -86,7 +91,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function logout() {
+  async function logout() {
+    try {
+      await authClient.signOut();
+    } catch {
+      /* ignore */
+    }
     setToken(null);
     setUser(null);
     setWorkspace(null);
