@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
+    # Better Auth (Next.js) — JWT JWKS verification
+    better_auth_url: str = "http://localhost:3000"
+    internal_auth_bootstrap_secret: str = ""
+
     # Email
     smtp_host: str = ""
     smtp_port: int = 587

@@ -8,25 +8,41 @@ import { BrandMark } from "@/components/shared/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth-client";
 import { api, setToken } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
+
+async function syncApiToken() {
+  const { data, error } = await authClient.token();
+  if (error || !data?.token) {
+    throw new Error(error?.message || "Failed to obtain API token");
+  }
+  setToken(data.token);
+  return data.token;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
   const setUser = useAppStore((s) => s.setUser);
   const [loading, setLoading] = useState(false);
+  const googleEnabled = Boolean(process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setLoading(true);
     try {
-      const tokens = await api.register({
+      const { error } = await authClient.signUp.email({
         email: String(form.get("email")),
         password: String(form.get("password")),
-        full_name: String(form.get("full_name")),
+        name: String(form.get("full_name")),
       });
-      setToken(tokens.access_token);
+      if (error) {
+        throw new Error(error.message || "Registration failed");
+      }
+      // Give bootstrap hook a moment, then fetch API JWT
+      await new Promise((r) => setTimeout(r, 300));
+      await syncApiToken();
       const me = await api.me();
       setUser(me);
       toast.success("Welcome to Veritas");
@@ -34,6 +50,19 @@ export default function RegisterPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Registration failed");
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onGoogle() {
+    setLoading(true);
+    try {
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/callback?next=/documents",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Google sign-up failed");
       setLoading(false);
     }
   }
@@ -81,6 +110,24 @@ export default function RegisterPage() {
             {loading ? "Creating…" : "Create account"}
           </Button>
         </form>
+        {googleEnabled && (
+          <>
+            <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-line" />
+              or
+              <span className="h-px flex-1 bg-line" />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={loading}
+              onClick={onGoogle}
+            >
+              Continue with Google
+            </Button>
+          </>
+        )}
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link href="/login" className="font-medium text-signal-deep hover:underline">

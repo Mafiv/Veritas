@@ -8,30 +8,58 @@ import { BrandMark } from "@/components/shared/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth-client";
 import { api, setToken } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
+
+async function syncApiToken() {
+  const { data, error } = await authClient.token();
+  if (error || !data?.token) {
+    throw new Error(error?.message || "Failed to obtain API token");
+  }
+  setToken(data.token);
+  return data.token;
+}
 
 export default function LoginPage() {
   const router = useRouter();
   const setUser = useAppStore((s) => s.setUser);
   const [loading, setLoading] = useState(false);
+  const googleEnabled = Boolean(process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setLoading(true);
     try {
-      const tokens = await api.login({
+      const { error } = await authClient.signIn.email({
         email: String(form.get("email")),
         password: String(form.get("password")),
       });
-      setToken(tokens.access_token);
+      if (error) {
+        throw new Error(error.message || "Login failed");
+      }
+      await syncApiToken();
+      // Ensure Veritas user exists (covers OAuth-created accounts and race on signup)
       const me = await api.me();
       setUser(me);
       router.push("/chat");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onGoogle() {
+    setLoading(true);
+    try {
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/callback?next=/chat",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Google sign-in failed");
       setLoading(false);
     }
   }
@@ -74,6 +102,24 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+        {googleEnabled && (
+          <>
+            <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-line" />
+              or
+              <span className="h-px flex-1 bg-line" />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={loading}
+              onClick={onGoogle}
+            >
+              Continue with Google
+            </Button>
+          </>
+        )}
         <p className="mt-6 text-center text-sm text-muted-foreground">
           New to Veritas?{" "}
           <Link href="/register" className="font-medium text-signal-deep hover:underline">

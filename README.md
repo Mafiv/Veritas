@@ -7,7 +7,7 @@ Veritas is a RAG-based “Chat with your data” SaaS platform. Upload PDFs, Not
 ## Architecture
 
 - **Frontend** — Next.js (App Router), Tailwind, shadcn-style primitives, Zustand
-- **API** — FastAPI with JWT auth, workspaces, documents, streaming chat, Stripe billing
+- **API** — FastAPI with Better Auth (Next.js) + JWKS JWT verification, workspaces, documents, streaming chat, Stripe billing
 - **Retrieval** — Hybrid vector + BM25 search, Reciprocal Rank Fusion, HyDE, query expansion, cross-encoder-style reranking
 - **Data** — PostgreSQL (+ pgvector-ready), Redis, local/S3 object storage, Celery workers
 
@@ -64,12 +64,45 @@ GEMINI_API_KEY=your-key-here
 USE_MOCK_LLM=false
 ```
 
-### 3. Frontend
+### 3. Authentication (Better Auth)
+
+Login/register are owned by **Better Auth** in the Next.js app (email/password + optional Google OAuth). FastAPI verifies Better Auth JWTs via JWKS and keeps Veritas `users` / workspaces / API keys.
+
+1. Copy env files and set a shared bootstrap secret (same value in both):
+
+```bash
+# backend/.env
+BETTER_AUTH_URL=http://localhost:3000
+INTERNAL_AUTH_BOOTSTRAP_SECRET=change-me-bootstrap-secret
+
+# frontend/.env.local
+BETTER_AUTH_SECRET=change-me-to-a-long-random-secret
+BETTER_AUTH_URL=http://localhost:3000
+DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
+INTERNAL_AUTH_BOOTSTRAP_SECRET=change-me-bootstrap-secret
+NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
+```
+
+2. Apply DB schemas:
+
+```bash
+cd backend && alembic upgrade head
+cd ../frontend && npm run db:push
+```
+
+3. Optional Google OAuth — create credentials in Google Cloud Console with redirect URI:
+
+`http://localhost:3000/api/auth/callback/google`
+
+Then set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` in `frontend/.env.local`.
+
+### 4. Frontend
 
 ```bash
 cd frontend
 cp .env.example .env.local
 npm install
+npm run db:push
 npm run dev
 ```
 

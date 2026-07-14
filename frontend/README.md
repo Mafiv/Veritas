@@ -10,11 +10,26 @@ cp .env.example .env.local
 
 Required variables:
 
-- `NEXT_PUBLIC_API_URL` (default in example: `http://localhost:8000/api/v1`)
+- `NEXT_PUBLIC_API_URL` (default: `http://localhost:8000/api/v1`)
+- `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `DATABASE_URL`
+- `INTERNAL_AUTH_BOOTSTRAP_SECRET` (must match backend)
+
+Optional Google OAuth:
+
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true`
+- Redirect URI: `http://localhost:3000/api/auth/callback/google`
+
+Apply Better Auth tables once:
+
+```bash
+# from repo with docker Postgres running:
+docker exec -i veritas-db-1 psql -U veritas -d veritas < scripts/create-better-auth-tables.sql
+```
 
 Integration note:
 
-- Backend `FRONTEND_URL` and `CORS_ORIGINS` in `backend/.env` should include your frontend origin (for local dev: `http://localhost:3000`).
+- Backend `FRONTEND_URL`, `CORS_ORIGINS`, and `BETTER_AUTH_URL` should match your frontend origin.
 
 ## Getting Started
 

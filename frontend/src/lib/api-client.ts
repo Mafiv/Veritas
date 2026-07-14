@@ -300,6 +300,13 @@ async function request<T>(
     } catch {
       /* ignore */
     }
+    if (res.status === 401 && typeof window !== "undefined") {
+      setToken(null);
+      if (!window.location.pathname.startsWith("/login") &&
+          !window.location.pathname.startsWith("/register")) {
+        window.location.href = "/login";
+      }
+    }
     throw new ApiError(message, res.status, code);
   }
   if (res.status === 204) return undefined as T;
@@ -307,12 +314,14 @@ async function request<T>(
 }
 
 export const api = {
+  /** @deprecated Prefer Better Auth signUp/signIn — kept for scripts/tests */
   register: (body: { email: string; password: string; full_name: string }) =>
     request<{ access_token: string; refresh_token: string }>("/auth/register", {
       method: "POST",
       body: JSON.stringify(body),
     }),
 
+  /** @deprecated Prefer Better Auth signIn — kept for scripts/tests */
   login: (body: { email: string; password: string }) =>
     request<{ access_token: string; refresh_token: string }>("/auth/login", {
       method: "POST",
