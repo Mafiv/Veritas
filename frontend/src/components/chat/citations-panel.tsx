@@ -24,8 +24,8 @@ export function CitationsPanel({
   className?: string;
 }) {
   return (
-    <div className={cn("flex h-full flex-col bg-white animate-fade-in", className)}>
-      <div className="flex items-center justify-between border-b border-line px-4 py-3.5">
+    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden bg-white animate-fade-in", className)}>
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3.5">
         <div className="flex items-center gap-2">
           <h2 className="font-display text-sm font-semibold text-ink">Sources</h2>
           <span className="rounded-full bg-signal-soft px-2 py-0.5 text-[10px] font-semibold text-signal-deep">
@@ -45,7 +45,7 @@ export function CitationsPanel({
         )}
       </div>
 
-      <ul className="flex-1 space-y-2.5 overflow-y-auto p-3">
+      <ul className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-3">
         {citations.map((c, i) => {
           const conf = confidence(c.score);
           return (

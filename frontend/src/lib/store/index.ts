@@ -8,9 +8,12 @@ interface AppState {
   user: User | null;
   workspace: Workspace | null;
   workspaces: Workspace[];
+  sidebarCollapsed: boolean;
   setUser: (user: User | null) => void;
   setWorkspace: (workspace: Workspace | null) => void;
   setWorkspaces: (workspaces: Workspace[]) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebar: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -19,11 +22,23 @@ export const useAppStore = create<AppState>()(
       user: null,
       workspace: null,
       workspaces: [],
+      sidebarCollapsed: false,
       setUser: (user) => set({ user }),
       setWorkspace: (workspace) => set({ workspace }),
       setWorkspaces: (workspaces) => set({ workspaces }),
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      toggleSidebar: () =>
+        set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     }),
-    { name: "veritas-app" },
+    {
+      name: "veritas-app",
+      partialize: (state) => ({
+        user: state.user,
+        workspace: state.workspace,
+        workspaces: state.workspaces,
+        sidebarCollapsed: state.sidebarCollapsed,
+      }),
+    },
   ),
 );
 

@@ -13,9 +13,15 @@ from app.core.config import get_settings
 from app.core.exceptions import UnauthorizedError
 
 
+def _jwks_base_url() -> str:
+    settings = get_settings()
+    internal = settings.better_auth_internal_url.strip()
+    return (internal or settings.better_auth_url).rstrip("/")
+
+
 @lru_cache
 def _jwk_client() -> PyJWKClient:
-    base = get_settings().better_auth_url.rstrip("/")
+    base = _jwks_base_url()
     return PyJWKClient(f"{base}/api/auth/jwks", cache_keys=True, lifespan=3600)
 
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Any
 
+import httpx
 import litellm
 
 from app.core.config import get_settings
@@ -15,6 +17,9 @@ _PROVIDER_API_KEYS: dict[str, str] = {
     "github": "github_api_key",
     "anthropic": "anthropic_api_key",
 }
+
+# GitHub Models OpenAI-compatible endpoint (LiteLLM mishandles gpt-5 max tokens).
+_GITHUB_MODELS_URL = "https://models.github.ai/inference/chat/completions"
 
 
 class LLMProviderError(RuntimeError):
@@ -41,11 +46,24 @@ class LLMClient:
         self._ensure_provider_configured(resolved_model)
 
         try:
+            if self._provider_name(resolved_model) == "github":
+                return await self._github_complete(
+                    model=resolved_model,
+                    system=system,
+                    user=user,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+
             response = await litellm.acompletion(
-                model=resolved_model,
-                messages=self._build_messages(system=system, user=user),
-                max_tokens=max_tokens,
-                temperature=temperature,
+                **self._completion_kwargs(
+                    model=resolved_model,
+                    system=system,
+                    user=user,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stream=False,
+                )
             )
             content = response.choices[0].message.content
             if content is None:
@@ -81,12 +99,28 @@ class LLMClient:
         self._ensure_provider_configured(resolved_model)
 
         try:
+            if self._provider_name(resolved_model) == "github":
+                # GitHub Models streaming via SSE; fall back to chunked complete for reliability.
+                text = await self._github_complete(
+                    model=resolved_model,
+                    system=system,
+                    user=user,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                for token in _tokenize_words(text):
+                    yield token
+                return
+
             response = await litellm.acompletion(
-                model=resolved_model,
-                messages=self._build_messages(system=system, user=user),
-                max_tokens=max_tokens,
-                temperature=temperature,
-                stream=True,
+                **self._completion_kwargs(
+                    model=resolved_model,
+                    system=system,
+                    user=user,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stream=True,
+                )
             )
             async for chunk in response:
                 delta = chunk.choices[0].delta.content
@@ -100,6 +134,94 @@ class LLMClient:
                 f"LLM stream failed for provider '{provider}' model '{resolved_model}': {exc}"
             ) from exc
 
+    async def _github_complete(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        max_tokens: int,
+        temperature: float,
+    ) -> str:
+        api_key = self.settings.github_api_key
+        # GitHub Models accepts openai/<name> or bare model ids.
+        api_model = model.split("/", 1)[-1]
+        if not api_model.startswith("openai/"):
+            # Prefer openai/ prefix used by GitHub Models catalog
+            if api_model.startswith(("gpt-", "o1", "o3", "o4")):
+                api_model = f"openai/{api_model}"
+
+        body: dict[str, Any] = {
+            "model": api_model,
+            "messages": self._build_messages(system=system, user=user),
+        }
+        # gpt-5 / o-series require max_completion_tokens and often reject temperature
+        if self._uses_max_completion_tokens(model):
+            # Reasoning models spend tokens before visible output — keep a floor.
+            body["max_completion_tokens"] = max(max_tokens, 256)
+        else:
+            body["max_tokens"] = max_tokens
+            body["temperature"] = temperature
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github+json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(_GITHUB_MODELS_URL, headers=headers, json=body)
+                if resp.status_code >= 400:
+                    raise LLMProviderError(
+                        f"GitHub Models HTTP {resp.status_code}: {resp.text[:400]}"
+                    )
+                data = resp.json()
+                content = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content")
+                )
+                if not content:
+                    raise LLMProviderError(
+                        f"Empty response from GitHub Models model '{api_model}'"
+                    )
+                return content
+        except LLMProviderError:
+            raise
+        except Exception as exc:
+            raise LLMProviderError(f"GitHub Models request failed: {exc}") from exc
+
+    def _completion_kwargs(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        max_tokens: int,
+        temperature: float,
+        stream: bool,
+    ) -> dict:
+        kwargs: dict = {
+            "model": model,
+            "messages": self._build_messages(system=system, user=user),
+            "stream": stream,
+            "api_key": self._api_key_for_model(model) or None,
+            "drop_params": True,
+        }
+        if self._uses_max_completion_tokens(model):
+            kwargs["max_completion_tokens"] = max_tokens
+            if not self._is_reasoning_model(model):
+                kwargs["temperature"] = temperature
+        else:
+            kwargs["max_tokens"] = max_tokens
+            kwargs["temperature"] = temperature
+        return kwargs
+
+    def _api_key_for_model(self, model: str) -> str:
+        provider = self._provider_name(model)
+        attr = _PROVIDER_API_KEYS.get(provider, "")
+        return getattr(self.settings, attr, "") if attr else ""
+
     @staticmethod
     def _build_messages(*, system: str, user: str) -> list[dict[str, str]]:
         return [
@@ -112,6 +234,21 @@ class LLMClient:
         if "/" in model:
             return model.split("/", 1)[0].lower()
         return "openai"
+
+    @staticmethod
+    def _model_name(model: str) -> str:
+        return model.split("/", 1)[-1].lower()
+
+    @classmethod
+    def _is_reasoning_model(cls, model: str) -> bool:
+        name = cls._model_name(model)
+        return name.startswith(("o1", "o3", "o4", "gpt-5"))
+
+    @classmethod
+    def _uses_max_completion_tokens(cls, model: str) -> bool:
+        """GitHub/OpenAI gpt-5 and o-series reject max_tokens."""
+        name = cls._model_name(model)
+        return name.startswith(("gpt-5", "o1", "o3", "o4"))
 
     def _ensure_provider_configured(self, model: str) -> None:
         provider = self._provider_name(model)

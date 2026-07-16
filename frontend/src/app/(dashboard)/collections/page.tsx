@@ -80,7 +80,8 @@ export default function CollectionsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 py-10">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+    <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-10">
       <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">
         Collections
       </h1>
@@ -164,6 +165,7 @@ export default function CollectionsPage() {
           ))}
         </ul>
       )}
+    </div>
     </div>
   );
 }

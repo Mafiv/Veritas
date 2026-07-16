@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Share2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DocumentDropzone } from "@/components/upload/dropzone";
+import { PreviewDocumentButton } from "@/components/upload/document-preview";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -134,7 +135,8 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 md:px-8">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="mx-auto w-full max-w-5xl px-4 py-8 md:px-8">
       <div className="mb-8">
         <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">
           Documents
@@ -255,6 +257,10 @@ export default function DocumentsPage() {
                       )}
                     </button>
                     <div className="flex items-center gap-1">
+                      <PreviewDocumentButton
+                        workspaceId={workspace.id}
+                        document={doc}
+                      />
                       <Button
                         variant="ghost"
                         size="icon"
@@ -286,6 +292,7 @@ export default function DocumentsPage() {
             })}
           </ul>
         )}
+      </div>
       </div>
     </div>
   );

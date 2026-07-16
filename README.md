@@ -110,12 +110,31 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Full stack via Docker
 
+Runs Postgres, Redis, migrations (Alembic + Better Auth tables), API, and frontend dev server:
+
 ```bash
+# Optional: copy shared secrets for compose variable substitution
+cp .env.docker.example .env
+
+# First run builds images (~2–5 min). Later runs are much faster:
+docker compose up
+
+# Rebuild only when dependencies or Dockerfiles change:
 docker compose up --build
+
+# Background jobs (embeddings, etc.) — optional:
+docker compose --profile worker up
+
+# Production-style Next.js build (slower):
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 ```
 
 - App: http://localhost:3000  
 - API docs: http://localhost:8000/docs  
+
+Compose sets Docker-internal URLs automatically (`BETTER_AUTH_INTERNAL_URL`, `INTERNAL_API_URL`). Browser-facing URLs stay `http://localhost:3000` and `http://localhost:8000`.
+
+To reset the database: `docker compose down -v` (destroys Postgres volume).
 
 ## Key features
 

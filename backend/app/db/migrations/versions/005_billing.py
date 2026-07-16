@@ -52,7 +52,7 @@ def upgrade() -> None:
         sa.Column("queries_per_day", sa.Integer(), nullable=False),
         sa.Column("documents_limit", sa.Integer(), nullable=False),
         sa.Column("workspaces_limit", sa.Integer(), nullable=False),
-        sa.Column("storage_bytes_limit", sa.Integer(), nullable=False),
+        sa.Column("storage_bytes_limit", sa.BigInteger(), nullable=False),
         sa.Column("seats_limit", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("features", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),

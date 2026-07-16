@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, File, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -147,6 +148,37 @@ async def get_document(
     if not doc:
         raise NotFoundError("Document not found")
     return doc
+
+
+@router.get("/workspaces/{workspace_id}/documents/{document_id}/file")
+async def get_document_file(
+    workspace_id: UUID,
+    document_id: UUID,
+    db: DbSession,
+    user: CurrentUser,
+    _access: RequireViewer,
+) -> FileResponse:
+    """Stream the original uploaded file for in-app preview / download."""
+    doc = (
+        await db.execute(
+            select(Document).where(
+                Document.id == document_id,
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("Document not found")
+    path = Path(doc.storage_path)
+    if not path.exists():
+        raise NotFoundError("Document file not found on storage")
+    return FileResponse(
+        path,
+        media_type=doc.content_type or "application/octet-stream",
+        filename=doc.original_filename,
+        content_disposition_type="inline",
+    )
 
 
 @router.get(

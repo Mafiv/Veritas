@@ -156,7 +156,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-8 md:px-8">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-8">
       <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">
         Settings
       </h1>
@@ -408,6 +409,7 @@ export default function SettingsPage() {
           ))}
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
