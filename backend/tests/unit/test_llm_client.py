@@ -54,6 +54,7 @@ async def test_complete_uses_litellm(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
         assert kwargs["max_tokens"] == 800
         assert kwargs["temperature"] == 0.2
+        assert kwargs.get("drop_params") is True
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="Hello from LLM"))]
         )
@@ -102,6 +103,48 @@ async def test_missing_api_key_raises_clear_error(monkeypatch: pytest.MonkeyPatc
     llm = LLMClient()
     with pytest.raises(LLMProviderError, match="Missing API key for provider 'gemini'"):
         await llm.complete(system="system", user="user")
+
+
+@pytest.mark.asyncio
+async def test_github_provider_uses_direct_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_settings(
+        monkeypatch,
+        llm_provider_model="github/gpt-5-mini",
+        github_api_key="ghp_test",
+        openai_api_key="",
+    )
+
+    class FakeResponse:
+        status_code = 200
+        text = "{}"
+
+        def json(self):
+            return {
+                "choices": [{"message": {"content": "OK from GitHub"}, "finish_reason": "stop"}]
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            assert "models.github.ai" in url
+            assert json["model"] == "openai/gpt-5-mini"
+            assert "max_completion_tokens" in json
+            assert "max_tokens" not in json
+            return FakeResponse()
+
+    monkeypatch.setattr("app.services.llm.client.httpx.AsyncClient", FakeClient)
+
+    llm = LLMClient()
+    result = await llm.complete(system="system", user="user", max_tokens=64)
+    assert result == "OK from GitHub"
 
 
 @pytest.mark.asyncio

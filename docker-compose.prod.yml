@@ -1,0 +1,12 @@
+# Production-style frontend (standalone Next.js build). Slower first build.
+services:
+  frontend:
+    image: veritas-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+        NEXT_PUBLIC_BETTER_AUTH_URL: http://localhost:3000
+        NEXT_PUBLIC_GOOGLE_AUTH_ENABLED: ${NEXT_PUBLIC_GOOGLE_AUTH_ENABLED:-false}
+    volumes: []

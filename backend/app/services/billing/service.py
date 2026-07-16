@@ -65,6 +65,7 @@ async def ensure_default_plans(db: AsyncSession) -> list[Plan]:
         },
     ]
     out: list[Plan] = []
+    created = False
     for d in defaults:
         if d["code"] in by_code:
             out.append(by_code[d["code"]])
@@ -72,7 +73,9 @@ async def ensure_default_plans(db: AsyncSession) -> list[Plan]:
         plan = Plan(**d, is_active=True)
         db.add(plan)
         out.append(plan)
-    await db.flush()
+        created = True
+    if created:
+        await db.flush()
     return out
 
 

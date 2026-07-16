@@ -7,7 +7,9 @@ import * as schema from "@/lib/db/schema";
 
 const betterAuthUrl = process.env.BETTER_AUTH_URL || "http://localhost:3000";
 const apiBase =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+  process.env.INTERNAL_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000/api/v1";
 const bootstrapSecret = process.env.INTERNAL_AUTH_BOOTSTRAP_SECRET || "";
 const googleClientId = process.env.GOOGLE_CLIENT_ID || "";
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || "";

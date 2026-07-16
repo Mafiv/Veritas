@@ -2,14 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY pyproject.toml ./
+# Runtime deps only — wheels cover our stack; skip build-essential for faster builds.
+COPY pyproject.toml alembic.ini README.md ./
 COPY app ./app
+COPY scripts ./scripts
 
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -e .
 
 RUN mkdir -p /app/storage
 

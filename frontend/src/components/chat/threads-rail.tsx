@@ -36,11 +36,13 @@ export function ThreadsRail({
   activeId,
   onSelect,
   onNew,
+  className,
 }: {
   threads: Thread[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
+  className?: string;
 }) {
   const [query, setQuery] = useState("");
 
@@ -53,8 +55,13 @@ export function ThreadsRail({
   const groups = useMemo(() => groupThreads(filtered), [filtered]);
 
   return (
-    <aside className="hidden w-[220px] shrink-0 flex-col border-r border-line bg-white/80 lg:flex">
-      <div className="flex items-center justify-between px-3 pb-2 pt-4">
+    <aside
+      className={cn(
+        "flex h-full min-h-0 flex-col overflow-hidden bg-white/80",
+        className,
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-between px-3 pb-2 pt-4">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate">
           Threads
         </p>
@@ -69,7 +76,7 @@ export function ThreadsRail({
         </button>
       </div>
 
-      <div className="px-3 pb-3">
+      <div className="shrink-0 px-3 pb-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate" />
           <Input
@@ -81,7 +88,7 @@ export function ThreadsRail({
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-2 pb-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-2 pb-4">
         {groups.length === 0 ? (
           <p className="px-2 py-6 text-center text-xs leading-relaxed text-muted-foreground">
             No conversations yet.

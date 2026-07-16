@@ -81,6 +81,8 @@ class Settings(BaseSettings):
 
     # Better Auth (Next.js) — JWT JWKS verification
     better_auth_url: str = "http://localhost:3000"
+    # Docker: use http://frontend:3000 so the API can reach JWKS internally
+    better_auth_internal_url: str = ""
     internal_auth_bootstrap_secret: str = ""
 
     # Email

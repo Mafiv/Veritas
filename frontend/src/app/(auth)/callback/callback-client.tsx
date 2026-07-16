@@ -30,6 +30,7 @@ export default function AuthCallbackClient() {
           throw new Error(error?.message || "Failed to obtain API token");
         }
         setToken(data.token);
+        await api.sync();
         let me = null;
         for (let i = 0; i < 5; i++) {
           try {

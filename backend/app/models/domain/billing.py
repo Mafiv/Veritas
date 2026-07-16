@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -54,7 +55,7 @@ class Plan(Base, TimestampMixin):
     queries_per_day: Mapped[int] = mapped_column(Integer, nullable=False)
     documents_limit: Mapped[int] = mapped_column(Integer, nullable=False)
     workspaces_limit: Mapped[int] = mapped_column(Integer, nullable=False)
-    storage_bytes_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_bytes_limit: Mapped[int] = mapped_column(BigInteger, nullable=False)
     seats_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     features: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

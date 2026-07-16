@@ -1,3 +1,13 @@
+# Fast local dev: shared backend image, Next.js dev server (no production build).
+# Optional worker: docker compose --profile worker up
+# Production frontend build: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+
+x-backend: &backend
+  image: veritas-backend
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -25,19 +35,42 @@ services:
       timeout: 3s
       retries: 10
 
-  api:
-    build: ./backend
-    ports:
-      - "8000:8000"
+  migrate:
+    <<: *backend
     env_file:
       - ./backend/.env.example
     environment:
       DATABASE_URL: postgresql+asyncpg://veritas:veritas@db:5432/veritas
       DATABASE_URL_SYNC: postgresql://veritas:veritas@db:5432/veritas
+      BETTER_AUTH_SQL_PATH: /scripts/create-better-auth-tables.sql
+    volumes:
+      - ./backend/app:/app/app
+      - ./frontend/scripts/create-better-auth-tables.sql:/scripts/create-better-auth-tables.sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    command: python scripts/docker_init_db.py
+
+  api:
+    <<: *backend
+    ports:
+      - "8000:8000"
+    env_file:
+      # Real keys/models from local .env (DATABASE_* overridden below for Docker network)
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://veritas:veritas@db:5432/veritas
+      DATABASE_URL_SYNC: postgresql://veritas:veritas@db:5432/veritas
       REDIS_URL: redis://redis:6379/0
-      USE_MOCK_LLM: "true"
       FRONTEND_URL: http://localhost:3000
       LOCAL_STORAGE_PATH: /app/storage
+      BETTER_AUTH_URL: http://localhost:3000
+      # Hybrid (frontend on host): host.docker.internal. Full Docker: set BETTER_AUTH_INTERNAL_URL=http://frontend:3000
+      BETTER_AUTH_INTERNAL_URL: ${BETTER_AUTH_INTERNAL_URL:-http://host.docker.internal:3000}
+      INTERNAL_AUTH_BOOTSTRAP_SECRET: ${INTERNAL_AUTH_BOOTSTRAP_SECRET:-dev-veritas-bootstrap-secret}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./backend/app:/app/app
       - veritas_storage:/app/storage
@@ -46,16 +79,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
-    build: ./backend
+    <<: *backend
+    profiles: [worker]
     env_file:
-      - ./backend/.env.example
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+asyncpg://veritas:veritas@db:5432/veritas
+      DATABASE_URL_SYNC: postgresql://veritas:veritas@db:5432/veritas
       REDIS_URL: redis://redis:6379/0
-      USE_MOCK_LLM: "true"
       LOCAL_STORAGE_PATH: /app/storage
     volumes:
       - ./backend/app:/app/app
@@ -65,17 +101,40 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info
 
   frontend:
-    build: ./frontend
+    image: veritas-frontend-dev
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_BETTER_AUTH_URL: http://localhost:3000
+      INTERNAL_API_URL: http://api:8000/api/v1
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-veritas-better-auth-secret-32chars}
+      BETTER_AUTH_URL: http://localhost:3000
+      DATABASE_URL: postgresql://veritas:veritas@db:5432/veritas
+      INTERNAL_AUTH_BOOTSTRAP_SECRET: ${INTERNAL_AUTH_BOOTSTRAP_SECRET:-dev-veritas-bootstrap-secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      NEXT_PUBLIC_GOOGLE_AUTH_ENABLED: ${NEXT_PUBLIC_GOOGLE_AUTH_ENABLED:-false}
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
     depends_on:
-      - api
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
 
 volumes:
   veritas_pg:
   veritas_storage:
+  frontend_node_modules:

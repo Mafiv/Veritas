@@ -40,7 +40,7 @@ export default function LoginPage() {
         throw new Error(error.message || "Login failed");
       }
       await syncApiToken();
-      // Ensure Veritas user exists (covers OAuth-created accounts and race on signup)
+      await api.sync();
       const me = await api.me();
       setUser(me);
       router.push("/chat");

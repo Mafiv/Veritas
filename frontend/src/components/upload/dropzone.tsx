@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { FileUp, X } from "lucide-react";
 import { toast } from "sonner";
+import { PreviewDocumentTextButton } from "@/components/upload/document-preview";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { api, type Document } from "@/lib/api-client";
@@ -161,6 +162,12 @@ export function DocumentDropzone({
                   <p className="mt-1 text-xs text-danger">{f.error}</p>
                 )}
               </div>
+              {f.status === "done" && f.document && (
+                <PreviewDocumentTextButton
+                  workspaceId={workspaceId}
+                  document={f.document}
+                />
+              )}
               <button
                 type="button"
                 className="text-muted-foreground hover:text-ink"

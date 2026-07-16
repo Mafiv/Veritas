@@ -40,9 +40,9 @@ export default function RegisterPage() {
       if (error) {
         throw new Error(error.message || "Registration failed");
       }
-      // Give bootstrap hook a moment, then fetch API JWT
-      await new Promise((r) => setTimeout(r, 300));
       await syncApiToken();
+      // Provision Veritas user (covers bootstrap-hook secret/race failures)
+      await api.sync();
       const me = await api.me();
       setUser(me);
       toast.success("Welcome to Veritas");

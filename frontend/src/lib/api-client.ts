@@ -330,6 +330,12 @@ export const api = {
 
   me: () => request<User>("/auth/me"),
 
+  /** Ensure Veritas user exists after Better Auth signup/login */
+  sync: () =>
+    request<{ id: string; email: string; created: boolean }>("/auth/sync", {
+      method: "POST",
+    }),
+
   listWorkspaces: () => request<Workspace[]>("/workspaces"),
   createWorkspace: (body: { name: string; description?: string }) =>
     request<Workspace>("/workspaces", { method: "POST", body: JSON.stringify(body) }),
@@ -351,6 +357,31 @@ export const api = {
     request<{ ok: boolean }>(`/workspaces/${workspaceId}/documents/${documentId}`, {
       method: "DELETE",
     }),
+
+  /** Fetch original file bytes for in-app preview (auth via Bearer token). */
+  fetchDocumentFile: async (workspaceId: string, documentId: string) => {
+    const headers = new Headers();
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(
+      `${API_BASE}/workspaces/${workspaceId}/documents/${documentId}/file`,
+      { headers },
+    );
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        const data = await res.json();
+        message = data?.error?.message || data?.detail || message;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(message, res.status);
+    }
+    const blob = await res.blob();
+    const contentType =
+      res.headers.get("content-type") || blob.type || "application/octet-stream";
+    return { blob, contentType };
+  },
 
   listThreads: (workspaceId: string) =>
     request<Thread[]>(`/workspaces/${workspaceId}/threads`),
