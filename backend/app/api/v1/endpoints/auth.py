@@ -10,8 +10,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
@@ -45,6 +46,14 @@ class BootstrapRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     avatar_url: str | None = None
 
+    @field_validator("full_name")
+    @classmethod
+    def full_name_not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("full_name must not be blank")
+        return stripped
+
 
 class BootstrapResponse(BaseModel):
     id: str
@@ -73,6 +82,7 @@ async def _provision_veritas_user(
 ) -> BootstrapResponse:
     """Idempotent Veritas user + personal workspace provisioning."""
     email = email.lower()
+    full_name = full_name.strip()
     existing = await db.execute(
         select(User).where(
             (User.auth_user_id == auth_user_id) | (User.email == email)
@@ -88,7 +98,7 @@ async def _provision_veritas_user(
             user.avatar_url = avatar_url
             changed = True
         if full_name and not user.full_name.strip():
-            user.full_name = full_name.strip()
+            user.full_name = full_name
             changed = True
         if changed:
             await db.flush()
@@ -96,13 +106,29 @@ async def _provision_veritas_user(
 
     user = User(
         email=email,
-        full_name=full_name.strip() or email.split("@")[0],
+        full_name=full_name or email.split("@")[0],
         hashed_password=hash_password(secrets.token_urlsafe(32)),
         auth_user_id=auth_user_id,
         avatar_url=avatar_url,
     )
     db.add(user)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Concurrent provisioning (bootstrap hook vs client /auth/sync) lost the
+        # insert race — clear this session and return the winner's row.
+        await db.rollback()
+        raced = await db.execute(
+            select(User).where(
+                (User.auth_user_id == auth_user_id) | (User.email == email)
+            )
+        )
+        winner = raced.scalar_one_or_none()
+        if winner is None:
+            raise
+        return BootstrapResponse(
+            id=str(winner.id), email=winner.email, created=False
+        )
 
     base_slug = _slugify(f"{user.full_name}-workspace")
     slug = base_slug

@@ -9,17 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
-import { api, setToken } from "@/lib/api-client";
+import { ensureVeritasSession } from "@/lib/auth-bootstrap";
 import { useAppStore } from "@/lib/store";
-
-async function syncApiToken() {
-  const { data, error } = await authClient.token();
-  if (error || !data?.token) {
-    throw new Error(error?.message || "Failed to obtain API token");
-  }
-  setToken(data.token);
-  return data.token;
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,9 +30,7 @@ export default function LoginPage() {
       if (error) {
         throw new Error(error.message || "Login failed");
       }
-      await syncApiToken();
-      await api.sync();
-      const me = await api.me();
+      const me = await ensureVeritasSession();
       setUser(me);
       router.push("/chat");
     } catch (err) {

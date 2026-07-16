@@ -9,17 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
-import { api, setToken } from "@/lib/api-client";
+import { ensureVeritasSession } from "@/lib/auth-bootstrap";
 import { useAppStore } from "@/lib/store";
-
-async function syncApiToken() {
-  const { data, error } = await authClient.token();
-  if (error || !data?.token) {
-    throw new Error(error?.message || "Failed to obtain API token");
-  }
-  setToken(data.token);
-  return data.token;
-}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -40,10 +31,8 @@ export default function RegisterPage() {
       if (error) {
         throw new Error(error.message || "Registration failed");
       }
-      await syncApiToken();
-      // Provision Veritas user (covers bootstrap-hook secret/race failures)
-      await api.sync();
-      const me = await api.me();
+      // Retries replace the old fixed delay — covers JWT/bootstrap races.
+      const me = await ensureVeritasSession();
       setUser(me);
       toast.success("Welcome to Veritas");
       router.push("/documents");

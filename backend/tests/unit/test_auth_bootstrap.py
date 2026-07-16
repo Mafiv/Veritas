@@ -21,3 +21,17 @@ def test_bootstrap_request_validates_email():
 def test_bootstrap_request_rejects_short_name():
     with pytest.raises(ValidationError):
         BootstrapRequest(auth_user_id="x", email="a@b.com", full_name="")
+
+
+def test_bootstrap_request_rejects_whitespace_only_name():
+    with pytest.raises(ValidationError):
+        BootstrapRequest(auth_user_id="x", email="a@b.com", full_name="   ")
+
+
+def test_bootstrap_request_strips_full_name():
+    body = BootstrapRequest(
+        auth_user_id="ba_user_1",
+        email="ada@example.com",
+        full_name="  Ada Lovelace  ",
+    )
+    assert body.full_name == "Ada Lovelace"

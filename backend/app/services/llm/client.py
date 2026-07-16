@@ -168,24 +168,49 @@ class LLMClient:
             "Content-Type": "application/json",
             "Accept": "application/vnd.github+json",
         }
+        # Free GitHub Models tiers rate-limit aggressively; retry a few times.
+        max_attempts = 4
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                resp = await client.post(_GITHUB_MODELS_URL, headers=headers, json=body)
-                if resp.status_code >= 400:
-                    raise LLMProviderError(
-                        f"GitHub Models HTTP {resp.status_code}: {resp.text[:400]}"
+                last_error = ""
+                for attempt in range(max_attempts):
+                    resp = await client.post(
+                        _GITHUB_MODELS_URL, headers=headers, json=body
                     )
-                data = resp.json()
-                content = (
-                    data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content")
+                    if resp.status_code == 429:
+                        retry_after = resp.headers.get("retry-after")
+                        try:
+                            delay = float(retry_after) if retry_after else 0.0
+                        except ValueError:
+                            delay = 0.0
+                        delay = max(delay, 1.5 * (2**attempt))
+                        last_error = resp.text[:400]
+                        if attempt + 1 >= max_attempts:
+                            break
+                        await asyncio.sleep(min(delay, 20.0))
+                        continue
+                    if resp.status_code >= 400:
+                        raise LLMProviderError(
+                            f"GitHub Models HTTP {resp.status_code}: {resp.text[:400]}"
+                        )
+                    data = resp.json()
+                    content = (
+                        data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content")
+                    )
+                    if not content:
+                        raise LLMProviderError(
+                            f"Empty response from GitHub Models model '{api_model}'"
+                        )
+                    return content
+                raise LLMProviderError(
+                    "GitHub Models rate limit exceeded (HTTP 429). "
+                    "Wait a minute, or set ENABLE_HYDE=false and "
+                    "ENABLE_QUERY_EXPANSION=false to use fewer requests, "
+                    "or enable paid GitHub Models / use another provider. "
+                    f"Details: {last_error}"
                 )
-                if not content:
-                    raise LLMProviderError(
-                        f"Empty response from GitHub Models model '{api_model}'"
-                    )
-                return content
         except LLMProviderError:
             raise
         except Exception as exc:

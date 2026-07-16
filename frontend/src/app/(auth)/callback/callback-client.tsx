@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { api, setToken } from "@/lib/api-client";
+import { ensureVeritasSession } from "@/lib/auth-bootstrap";
 import { useAppStore } from "@/lib/store";
 
 /**
@@ -25,22 +25,7 @@ export default function AuthCallbackClient() {
           router.replace("/login");
           return;
         }
-        const { data, error } = await authClient.token();
-        if (error || !data?.token) {
-          throw new Error(error?.message || "Failed to obtain API token");
-        }
-        setToken(data.token);
-        await api.sync();
-        let me = null;
-        for (let i = 0; i < 5; i++) {
-          try {
-            me = await api.me();
-            break;
-          } catch {
-            await new Promise((r) => setTimeout(r, 400));
-          }
-        }
-        if (!me) throw new Error("Account provisioning timed out");
+        const me = await ensureVeritasSession();
         if (!cancelled) {
           setUser(me);
           router.replace(next);
