@@ -20,11 +20,15 @@ class QueryRewriter:
             "Generate {n} alternative phrasings of the search query below. "
             "Return one query per line, no numbering.\n\nQuery: {q}"
         ).format(n=n, q=question)
-        text = await self.llm.complete(
-            system="You rewrite search queries to improve document retrieval recall.",
-            user=prompt,
-            max_tokens=200,
-        )
+        try:
+            text = await self.llm.complete(
+                system="You rewrite search queries to improve document retrieval recall.",
+                user=prompt,
+                max_tokens=200,
+            )
+        except Exception:
+            # Rate limits / provider errors should not fail the whole chat.
+            return [question]
         lines = [ln.strip(" -•\t") for ln in text.splitlines() if ln.strip()]
         variants = [question]
         for line in lines:
