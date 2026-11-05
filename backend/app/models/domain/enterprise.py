@@ -20,6 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     ExportJobStatus,
     ExportJobType,
@@ -71,7 +72,7 @@ class WebhookDelivery(Base, TimestampMixin):
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONType, nullable=False)
     status: Mapped[WebhookDeliveryStatus] = mapped_column(
-        Enum(WebhookDeliveryStatus, name="webhook_delivery_status"),
+        Enum(WebhookDeliveryStatus, values_callable=enum_values, name="webhook_delivery_status"),
         default=WebhookDeliveryStatus.PENDING,
         nullable=False,
     )
@@ -100,7 +101,7 @@ class SsoConnection(Base, TimestampMixin, SoftDeleteMixin):
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     provider: Mapped[SsoProvider] = mapped_column(
-        Enum(SsoProvider, name="sso_provider"), nullable=False
+        Enum(SsoProvider, values_callable=enum_values, name="sso_provider"), nullable=False
     )
     issuer_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     client_id: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
@@ -149,10 +150,10 @@ class ExportJob(Base, TimestampMixin):
         ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True
     )
     job_type: Mapped[ExportJobType] = mapped_column(
-        Enum(ExportJobType, name="export_job_type"), nullable=False
+        Enum(ExportJobType, values_callable=enum_values, name="export_job_type"), nullable=False
     )
     status: Mapped[ExportJobStatus] = mapped_column(
-        Enum(ExportJobStatus, name="export_job_status"),
+        Enum(ExportJobStatus, values_callable=enum_values, name="export_job_status"),
         default=ExportJobStatus.QUEUED,
         nullable=False,
     )
@@ -183,7 +184,8 @@ class SharedLink(Base, TimestampMixin, SoftDeleteMixin):
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     resource_type: Mapped[SharedLinkResourceType] = mapped_column(
-        Enum(SharedLinkResourceType, name="shared_link_resource_type"), nullable=False
+        Enum(SharedLinkResourceType, values_callable=enum_values, name="shared_link_resource_type"),
+        nullable=False,
     )
     resource_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)

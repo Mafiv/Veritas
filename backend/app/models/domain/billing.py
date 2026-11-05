@@ -21,6 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     JSONType,
     PlanTier,
@@ -41,7 +42,7 @@ class Plan(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     code: Mapped[PlanTier] = mapped_column(
-        Enum(PlanTier, name="plan_tier", create_constraint=False),
+        Enum(PlanTier, values_callable=enum_values, name="plan_tier", create_constraint=False),
         unique=True,
         nullable=False,
     )
@@ -82,7 +83,7 @@ class Subscription(Base, TimestampMixin):
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     status: Mapped[SubscriptionStatus] = mapped_column(
-        Enum(SubscriptionStatus, name="subscription_status"),
+        Enum(SubscriptionStatus, values_callable=enum_values, name="subscription_status"),
         default=SubscriptionStatus.ACTIVE,
         nullable=False,
     )

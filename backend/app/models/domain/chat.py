@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     FeedbackVote,
     JSONType,
@@ -90,7 +91,7 @@ class ChatMessage(Base, TimestampMixin):
         ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[MessageRole] = mapped_column(
-        Enum(MessageRole, name="message_role"), nullable=False
+        Enum(MessageRole, values_callable=enum_values, name="message_role"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Legacy JSON blob — normalized into message_citations / message_feedback.
@@ -154,7 +155,7 @@ class MessageFeedback(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     vote: Mapped[FeedbackVote] = mapped_column(
-        Enum(FeedbackVote, name="feedback_vote"), nullable=False
+        Enum(FeedbackVote, values_callable=enum_values, name="feedback_vote"), nullable=False
     )
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
