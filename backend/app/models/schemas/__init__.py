@@ -122,6 +122,8 @@ class MessageOut(ORMModel):
     content: str
     citations: Optional[list[Citation]] = None
     feedback: Optional[str] = None
+    # Retrieval trace, status (complete/interrupted/error), abstained flag.
+    token_usage: Optional[dict] = None
     created_at: datetime
 
 

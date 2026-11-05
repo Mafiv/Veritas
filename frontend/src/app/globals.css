@@ -220,13 +220,84 @@
     transition: background 150ms ease, transform 150ms ease;
   }
 
+  /* Rendered assistant answers (react-markdown output) */
+  .answer-md > * + * {
+    margin-top: 0.75em;
+  }
+  .answer-md ul,
+  .answer-md ol {
+    padding-left: 1.25rem;
+  }
+  .answer-md ul {
+    list-style: disc;
+  }
+  .answer-md ol {
+    list-style: decimal;
+  }
+  .answer-md li + li {
+    margin-top: 0.25em;
+  }
+  .answer-md h1,
+  .answer-md h2,
+  .answer-md h3 {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .answer-md h1 {
+    font-size: 1.2em;
+  }
+  .answer-md h2 {
+    font-size: 1.1em;
+  }
+  .answer-md code {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.875em;
+    padding: 0.1em 0.35em;
+    border-radius: 0.3rem;
+    background: var(--signal-soft);
+  }
+  .answer-md pre {
+    overflow-x: auto;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--line) 25%, transparent);
+  }
+  .answer-md pre code {
+    padding: 0;
+    background: none;
+  }
+  .answer-md blockquote {
+    padding-left: 0.85rem;
+    border-left: 3px solid var(--line);
+    color: var(--slate);
+  }
+  .answer-md table {
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.9em;
+  }
+  .answer-md th,
+  .answer-md td {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--line);
+    text-align: left;
+  }
+  .answer-md a:not(.citation-chip) {
+    color: var(--signal-deep);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   .citation-chip:hover {
     background: var(--signal);
     color: white;
     transform: translateY(-1px);
   }
 
-  .stream-caret::after {
+  .stream-caret .answer-md > :last-child::after {
     content: "";
     display: inline-block;
     width: 0.45em;
