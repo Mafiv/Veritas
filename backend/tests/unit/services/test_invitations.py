@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.core.exceptions import ForbiddenError, VeritasError
+from app.core.exceptions import ForbiddenError
 from app.models.domain import InvitationStatus, WorkspaceRole
 from app.services.identity import invitations as invitation_service
 

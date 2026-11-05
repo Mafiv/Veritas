@@ -3,8 +3,10 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_SECRET_KEY = "change-me-in-production-veritas-secret-key-32chars"
 
 
 class Settings(BaseSettings):
@@ -19,10 +21,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "staging", "production"] = "development"
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
-    secret_key: str = Field(default="change-me-in-production-veritas-secret-key-32chars")
-    access_token_expire_minutes: int = 60 * 24
-    refresh_token_expire_days: int = 30
-    algorithm: str = "HS256"
+    secret_key: str = Field(default=DEFAULT_SECRET_KEY)
 
     # Database
     database_url: str = "postgresql+asyncpg://veritas:veritas@localhost:5432/veritas"
@@ -48,9 +47,14 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     github_api_key: str = ""
     anthropic_api_key: str = ""
+    deepseek_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    # Embeddings: "local" (fastembed/ONNX, no key), "openai", or "mock" (tests only).
+    # embedding_dimensions must match the vector(N) column created by migration 011.
+    embedding_provider: Literal["local", "openai", "mock"] = "local"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dimensions: int = 384
+    model_cache_dir: str = ""  # fastembed model cache; empty = library default
     chat_model: str = "gpt-4o-mini"
     chat_fallback_model: str = "gpt-3.5-turbo"
     use_mock_llm: bool = True  # deterministic local mode without API keys
@@ -59,10 +63,25 @@ class Settings(BaseSettings):
     hybrid_vector_weight: float = 0.6
     hybrid_bm25_weight: float = 0.4
     retrieval_top_k: int = 20
+    # Candidates pulled from each index (vector, keyword) before fusion.
+    retrieval_candidates: int = 50
+    # HNSW search breadth; higher = better recall, slower.
+    hnsw_ef_search: int = 80
     rerank_top_k: int = 8
-    enable_hyde: bool = True
-    enable_query_expansion: bool = True
+    # HyDE / multi-query each add an LLM round-trip before retrieval; off unless
+    # the eval shows a gain worth the latency.
+    enable_hyde: bool = False
+    enable_query_expansion: bool = False
     enable_reranker: bool = True
+    # Max tokens of source text placed in the prompt.
+    context_token_budget: int = 3000
+    # Abstain without calling the LLM when the best reranked source scores below
+    # this. The scale depends on RERANKER_BACKEND, so re-tune with
+    # `python -m evaluation.run` when switching. 0 disables abstention.
+    # 0.20 is deliberately below the eval's best-separating value (~0.28, fit on
+    # only 6 negatives): a false refusal is worse than the LLM saying the sources
+    # do not cover it.
+    min_relevance_score: float = 0.2
 
     # Stripe
     stripe_secret_key: str = ""
@@ -71,7 +90,17 @@ class Settings(BaseSettings):
     stripe_price_team: str = ""
     frontend_url: str = "http://localhost:3000"
 
-    # Rate limits / free tier
+    # Ingestion: run in the API process (dev, no worker) or queue on Celery.
+    ingest_inline: bool = True
+    max_upload_mb: int = 25
+
+    # Per-minute request limits (Redis, shared across workers). 0 disables one.
+    rate_limit_enabled: bool = True
+    rate_limit_chat_per_minute: int = 30
+    rate_limit_upload_per_minute: int = 20
+    rate_limit_auth_sync_per_minute: int = 20
+
+    # Plan quotas / free tier
     free_tier_queries_per_day: int = 20
     free_tier_documents: int = 5
     free_tier_workspaces: int = 1
@@ -93,10 +122,29 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@veritas.local"
     smtp_use_tls: bool = True
 
-    # Retrieval productionization
-    use_pgvector: bool = False
+    # Reranking
+    # Chosen by evaluation/: lexical beat the MS MARCO cross-encoder on our
+    # technical-docs eval (R@5 0.93 vs 0.85) at ~75 ms vs ~2.8 s on CPU.
     reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+
+    @model_validator(mode="after")
+    def _refuse_insecure_production(self) -> "Settings":
+        """Fail fast instead of booting production with dev secrets."""
+        if self.app_env != "production":
+            return self
+        problems: list[str] = []
+        if self.secret_key == DEFAULT_SECRET_KEY or len(self.secret_key) < 32:
+            problems.append("SECRET_KEY must be set to a random value of at least 32 chars")
+        if len(self.internal_auth_bootstrap_secret) < 16:
+            problems.append("INTERNAL_AUTH_BOOTSTRAP_SECRET must be at least 16 chars")
+        if self.debug:
+            problems.append("DEBUG must be false")
+        if self.use_mock_llm:
+            problems.append("USE_MOCK_LLM must be false")
+        if problems:
+            raise ValueError("Insecure production configuration: " + "; ".join(problems))
+        return self
 
 
 @lru_cache

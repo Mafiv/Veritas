@@ -10,6 +10,7 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, Text,
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     JSONType,
     NotificationChannel,
@@ -53,6 +54,7 @@ class NotificationPreference(Base, TimestampMixin):
     )
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     channel: Mapped[NotificationChannel] = mapped_column(
-        Enum(NotificationChannel, name="notification_channel"), nullable=False
+        Enum(NotificationChannel, values_callable=enum_values, name="notification_channel"),
+        nullable=False,
     )
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

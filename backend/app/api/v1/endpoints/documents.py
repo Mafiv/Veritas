@@ -18,6 +18,7 @@ from app.api.deps import (
     RequireViewer,
     check_document_quota,
 )
+from app.api.rate_limit import limit_per_user
 from app.core.exceptions import NotFoundError
 from app.models.domain import Document, DocumentStatus
 from app.models.schemas import DocumentListResponse, DocumentOut
@@ -36,6 +37,12 @@ from app.services.documents import service as doc_service
 from app.services.ingestion import jobs as job_service
 from app.services.ingestion.parser import detect_doc_type
 from app.services.ingestion.pipeline import IngestionService
+from app.services.ingestion.upload import (
+    dispatch_ingestion,
+    read_limited,
+    sanitize_filename,
+    validate_content,
+)
 
 router = APIRouter(tags=["documents"])
 ingestion = IngestionService()
@@ -61,7 +68,12 @@ async def list_documents(
     return DocumentListResponse(items=items, total=len(items))
 
 
-@router.post("/workspaces/{workspace_id}/documents", response_model=DocumentOut)
+@router.post(
+    "/workspaces/{workspace_id}/documents",
+    response_model=DocumentOut,
+    status_code=202,
+    dependencies=[limit_per_user("upload", "rate_limit_upload_per_minute")],
+)
 async def upload_document(
     workspace_id: UUID,
     db: DbSession,
@@ -71,10 +83,11 @@ async def upload_document(
 ) -> Document:
     await check_document_quota(user, db)
 
-    data = await file.read()
-    filename = file.filename or "upload.txt"
+    data = await read_limited(file)
+    filename = sanitize_filename(file.filename)
     content_type = file.content_type or "application/octet-stream"
     doc_type = detect_doc_type(filename, content_type)
+    validate_content(doc_type, data)
 
     existing = await db.execute(
         select(Document)
@@ -110,11 +123,6 @@ async def upload_document(
         document_id=doc.id,
     )
 
-    try:
-        await ingestion.process_document(db, doc.id, job_id=job.id)
-    except Exception:
-        pass
-
     await write_audit(
         db,
         action="document.upload",
@@ -124,6 +132,7 @@ async def upload_document(
         workspace_id=workspace_id,
         details={"filename": filename, "version": version, "job_id": str(job.id)},
     )
+    await dispatch_ingestion(db, doc, job)
     await db.refresh(doc)
     return doc
 
@@ -340,9 +349,7 @@ async def create_document_permission(
     return DocumentPermissionOut.model_validate(row)
 
 
-@router.delete(
-    "/workspaces/{workspace_id}/documents/{document_id}/permissions/{permission_id}"
-)
+@router.delete("/workspaces/{workspace_id}/documents/{document_id}/permissions/{permission_id}")
 async def delete_document_permission(
     workspace_id: UUID,
     document_id: UUID,
@@ -351,9 +358,7 @@ async def delete_document_permission(
     user: CurrentUser,
     _access: RequireOwner,
 ) -> dict:
-    await doc_service.revoke_permission(
-        db, document_id=document_id, permission_id=permission_id
-    )
+    await doc_service.revoke_permission(db, document_id=document_id, permission_id=permission_id)
     return {"ok": True}
 
 
@@ -396,6 +401,7 @@ async def delete_document(
 @router.post(
     "/workspaces/{workspace_id}/documents/{document_id}/reprocess",
     response_model=DocumentOut,
+    status_code=202,
 )
 async def reprocess_document(
     workspace_id: UUID,
@@ -421,7 +427,7 @@ async def reprocess_document(
         document_id=doc.id,
         document_version_id=doc.active_version_id,
     )
-    await ingestion.process_document(db, doc.id, job_id=job.id)
+    await dispatch_ingestion(db, doc, job)
     await db.refresh(doc)
     return doc
 
@@ -511,9 +517,7 @@ async def add_collection_document(
     raise NotFoundError("Collection not found")
 
 
-@router.delete(
-    "/workspaces/{workspace_id}/collections/{collection_id}/documents/{document_id}"
-)
+@router.delete("/workspaces/{workspace_id}/collections/{collection_id}/documents/{document_id}")
 async def remove_collection_document(
     workspace_id: UUID,
     collection_id: UUID,

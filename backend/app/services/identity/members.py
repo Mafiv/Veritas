@@ -56,7 +56,9 @@ async def add_existing_member(
     actor_id: UUID,
 ) -> tuple[WorkspaceMember, User]:
     if role == WorkspaceRole.OWNER:
-        raise ForbiddenError("Cannot directly assign owner via add member; transfer ownership separately")
+        raise ForbiddenError(
+            "Cannot directly assign owner via add member; transfer ownership separately"
+        )
 
     target = (
         await db.execute(select(User).where(User.email == email.lower()))

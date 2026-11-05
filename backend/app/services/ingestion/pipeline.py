@@ -9,6 +9,7 @@ from pathlib import Path
 
 import aiofiles
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -26,12 +27,15 @@ from app.models.domain import (
     IngestionJobStage,
     SuggestedQuestion,
 )
-from app.services.ingestion.chunker import chunk_document
+from app.services.ingestion.chunker import chunk_document, contextualize
 from app.services.ingestion.embedder import Embedder
 from app.services.ingestion import jobs as job_service
 from app.services.ingestion.parser import parse_document
 from app.services.llm.client import LLMClient
+from app.services.monitoring.logger import get_logger
 from app.services.notifications.service import notify_user
+
+log = get_logger("veritas.ingestion")
 
 
 class IngestionService:
@@ -50,11 +54,24 @@ class IngestionService:
             await f.write(data)
         return str(path)
 
-    async def _default_embedding_model(self, db: AsyncSession) -> EmbeddingModel | None:
-        result = await db.execute(
-            select(EmbeddingModel).where(EmbeddingModel.is_default.is_(True)).limit(1)
-        )
-        return result.scalar_one_or_none()
+    async def _active_embedding_model(self, db: AsyncSession) -> EmbeddingModel:
+        """Registry row for the model that actually produced these vectors."""
+        model_id = self.settings.embedding_model
+        row = (
+            await db.execute(select(EmbeddingModel).where(EmbeddingModel.model_id == model_id))
+        ).scalar_one_or_none()
+        if row is None:
+            row = EmbeddingModel(
+                name=model_id.split("/")[-1][:120],
+                provider=self.settings.embedding_provider,
+                model_id=model_id,
+                dimensions=self.settings.embedding_dimensions,
+                is_default=False,
+                is_active=True,
+            )
+            db.add(row)
+            await db.flush()
+        return row
 
     async def process_document(
         self,
@@ -85,134 +102,150 @@ class IngestionService:
         await job_service.mark_processing(db, job, stage=IngestionJobStage.PARSE)
 
         try:
-            path = Path(doc.storage_path)
-            data = path.read_bytes()
-            content_hash = hashlib.sha256(data).hexdigest()
-            doc.content_hash = content_hash
+            # SAVEPOINT: a database error rolls back only this document's work,
+            # leaving the session usable so the failure can still be recorded.
+            async with db.begin_nested():
+                path = Path(doc.storage_path)
+                data = path.read_bytes()
+                content_hash = hashlib.sha256(data).hexdigest()
+                doc.content_hash = content_hash
 
-            # Ensure a document_versions row exists for this upload
-            version = await self._ensure_version(db, doc, content_hash)
-            doc.active_version_id = version.id
-            doc.version = version.version_number
+                # Ensure a document_versions row exists for this upload
+                version = await self._ensure_version(db, doc, content_hash)
+                doc.active_version_id = version.id
+                doc.version = version.version_number
 
-            await job_service.mark_stage(db, job, IngestionJobStage.CHUNK)
-            parsed = parse_document(doc.original_filename, doc.content_type, data)
-            chunks = chunk_document(parsed)
+                await job_service.mark_stage(db, job, IngestionJobStage.CHUNK)
+                parsed = parse_document(doc.original_filename, doc.content_type, data)
+                chunks = chunk_document(parsed)
 
-            await job_service.mark_stage(db, job, IngestionJobStage.EMBED)
-            embeddings = await self.embedder.embed_texts([c.content for c in chunks])
-            emb_model = await self._default_embedding_model(db)
+                await job_service.mark_stage(db, job, IngestionJobStage.EMBED)
+                embeddings = await self.embedder.embed_texts(
+                    [contextualize(doc.original_filename, c.heading, c.content) for c in chunks]
+                )
+                emb_model = await self._active_embedding_model(db)
 
-            existing = await db.execute(
-                select(DocumentChunk).where(DocumentChunk.document_id == doc.id)
-            )
-            for old in existing.scalars().all():
-                await db.delete(old)
-            await db.flush()
+                existing = await db.execute(
+                    select(DocumentChunk).where(DocumentChunk.document_id == doc.id)
+                )
+                for old in existing.scalars().all():
+                    await db.delete(old)
+                await db.flush()
 
-            for chunk, emb in zip(chunks, embeddings):
+                for chunk, emb in zip(chunks, embeddings):
+                    db.add(
+                        DocumentChunk(
+                            document_id=doc.id,
+                            document_version_id=version.id,
+                            workspace_id=doc.workspace_id,
+                            chunk_index=chunk.chunk_index,
+                            content=chunk.content,
+                            token_count=chunk.token_count,
+                            page_number=chunk.page_number,
+                            heading=chunk.heading,
+                            embedding=emb,
+                            embedding_model_id=emb_model.id,
+                            meta=chunk.meta,
+                        )
+                    )
+
+                doc.page_count = parsed.page_count
+                doc.chunk_count = len(chunks)
+                doc.meta = {**(doc.meta or {}), **parsed.meta}
+
+                await job_service.mark_stage(db, job, IngestionJobStage.SUMMARIZE)
+                # Chunks + embeddings are what make a document searchable. Summary and
+                # suggested questions are enrichment: an LLM outage must not fail the
+                # document, so they degrade to empty instead.
+                try:
+                    summary = await self.llm.complete(
+                        system="Summarize the document in 2-3 concise sentences for a research assistant preview.",
+                        user=parsed.text[:6000],
+                        max_tokens=200,
+                    )
+                    questions_raw = await self.llm.complete(
+                        system=(
+                            "Suggest 5 insightful questions a user could ask about this document. "
+                            "One question per line."
+                        ),
+                        user=parsed.text[:4000],
+                        max_tokens=250,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "ingestion.enrichment_failed", document_id=str(doc.id), error=str(exc)
+                    )
+                    summary, questions_raw = "", ""
+                questions = [
+                    q.strip(" -•\t0123456789.") for q in questions_raw.splitlines() if q.strip()
+                ][:5]
+
+                doc.summary = summary
+                doc.suggested_questions = questions
+
+                # Normalized tables
                 db.add(
-                    DocumentChunk(
+                    DocumentSummary(
                         document_id=doc.id,
                         document_version_id=version.id,
-                        workspace_id=doc.workspace_id,
-                        chunk_index=chunk.chunk_index,
-                        content=chunk.content,
-                        token_count=chunk.token_count,
-                        page_number=chunk.page_number,
-                        heading=chunk.heading,
-                        embedding=emb,
-                        embedding_model_id=emb_model.id if emb_model else None,
-                        meta=chunk.meta,
-                    )
-                )
-
-            doc.page_count = parsed.page_count
-            doc.chunk_count = len(chunks)
-            doc.meta = {**(doc.meta or {}), **parsed.meta}
-
-            await job_service.mark_stage(db, job, IngestionJobStage.SUMMARIZE)
-            summary = await self.llm.complete(
-                system="Summarize the document in 2-3 concise sentences for a research assistant preview.",
-                user=parsed.text[:6000],
-                max_tokens=200,
-            )
-            questions_raw = await self.llm.complete(
-                system=(
-                    "Suggest 5 insightful questions a user could ask about this document. "
-                    "One question per line."
-                ),
-                user=parsed.text[:4000],
-                max_tokens=250,
-            )
-            questions = [
-                q.strip(" -•\t0123456789.")
-                for q in questions_raw.splitlines()
-                if q.strip()
-            ][:5]
-
-            doc.summary = summary
-            doc.suggested_questions = questions
-
-            # Normalized tables
-            db.add(
-                DocumentSummary(
-                    document_id=doc.id,
-                    document_version_id=version.id,
-                    summary_text=summary,
-                    summary_type="auto",
-                    model_name=self.settings.chat_model,
-                    token_count=max(1, len(summary) // 4),
-                )
-            )
-            # Replace suggested questions rows
-            old_q = await db.execute(
-                select(SuggestedQuestion).where(SuggestedQuestion.document_id == doc.id)
-            )
-            for qrow in old_q.scalars().all():
-                await db.delete(qrow)
-            await db.flush()
-            for i, q in enumerate(questions):
-                db.add(
-                    SuggestedQuestion(
-                        document_id=doc.id,
-                        question=q,
-                        rank=i,
+                        summary_text=summary,
+                        summary_type="auto",
                         model_name=self.settings.chat_model,
+                        token_count=max(1, len(summary) // 4),
                     )
                 )
+                # Replace suggested questions rows
+                old_q = await db.execute(
+                    select(SuggestedQuestion).where(SuggestedQuestion.document_id == doc.id)
+                )
+                for qrow in old_q.scalars().all():
+                    await db.delete(qrow)
+                await db.flush()
+                for i, q in enumerate(questions):
+                    db.add(
+                        SuggestedQuestion(
+                            document_id=doc.id,
+                            question=q,
+                            rank=i,
+                            model_name=self.settings.chat_model,
+                        )
+                    )
 
-            await self._extract_entities(db, doc, parsed.text)
+                await self._extract_entities(db, doc, parsed.text)
 
-            doc.status = DocumentStatus.READY
-            doc.error_message = None
-            await job_service.mark_done(db, job)
-            await db.flush()
+                doc.status = DocumentStatus.READY
+                doc.error_message = None
+                await job_service.mark_done(db, job)
+                await db.flush()
 
-            await notify_user(
-                db,
-                user_id=doc.uploaded_by,
-                workspace_id=doc.workspace_id,
-                type="document.ready",
-                title="Document ready",
-                body=f"{doc.original_filename} finished indexing ({doc.chunk_count} chunks).",
-                link_url="/documents",
-                meta={"document_id": str(doc.id)},
-            )
-            from app.services.enterprise.service import enqueue_webhook_deliveries
+                await notify_user(
+                    db,
+                    user_id=doc.uploaded_by,
+                    workspace_id=doc.workspace_id,
+                    type="document.ready",
+                    title="Document ready",
+                    body=f"{doc.original_filename} finished indexing ({doc.chunk_count} chunks).",
+                    link_url="/documents",
+                    meta={"document_id": str(doc.id)},
+                )
+                from app.services.enterprise.service import enqueue_webhook_deliveries
 
-            await enqueue_webhook_deliveries(
-                db,
-                workspace_id=doc.workspace_id,
-                event_type="document.ready",
-                payload={
-                    "document_id": str(doc.id),
-                    "filename": doc.original_filename,
-                    "chunk_count": doc.chunk_count,
-                },
-            )
-            return doc
+                await enqueue_webhook_deliveries(
+                    db,
+                    workspace_id=doc.workspace_id,
+                    event_type="document.ready",
+                    payload={
+                        "document_id": str(doc.id),
+                        "filename": doc.original_filename,
+                        "chunk_count": doc.chunk_count,
+                    },
+                )
+                return doc
         except Exception as exc:  # noqa: BLE001
+            # Objects touched inside the rolled-back savepoint are expired.
+            await db.refresh(doc)
+            if job:
+                await db.refresh(job)
             doc.status = DocumentStatus.FAILED
             doc.error_message = str(exc)[:1000]
             if job:
@@ -280,9 +313,7 @@ class IngestionService:
     async def _extract_entities(self, db: AsyncSession, doc: Document, text: str) -> None:
         """Lightweight entity extraction — capitalized phrases + dates."""
         # Clear prior mentions for this document
-        old = await db.execute(
-            select(DocumentEntity).where(DocumentEntity.document_id == doc.id)
-        )
+        old = await db.execute(select(DocumentEntity).where(DocumentEntity.document_id == doc.id))
         for row in old.scalars().all():
             await db.delete(row)
         await db.flush()
@@ -299,34 +330,38 @@ class IngestionService:
         ):
             candidates.append((m.group(1), EntityType.DATE))
 
-        seen: set[str] = set()
+        unique: dict[tuple[str, str], tuple[str, EntityType]] = {}
         for name, etype in candidates[:40]:
-            key = f"{etype.value}:{name.lower()}"
-            if key in seen:
-                continue
-            seen.add(key)
-            normalized = name.lower()
-            entity = (
-                await db.execute(
-                    select(Entity).where(
-                        Entity.workspace_id == doc.workspace_id,
-                        Entity.normalized_name == normalized,
-                        Entity.entity_type == etype,
-                    )
-                )
-            ).scalar_one_or_none()
-            if not entity:
-                entity = Entity(
+            unique.setdefault((etype.value, name.lower()), (name, etype))
+        # Insert in a fixed order so two documents ingested concurrently take
+        # the unique-index locks in the same order and cannot deadlock.
+        for (_, normalized), (name, etype) in sorted(unique.items()):
+            # Upsert: documents of one workspace are ingested concurrently by the
+            # worker, and entities are unique per workspace. Select-then-insert
+            # raced and failed the whole document on uq_entity_workspace.
+            await db.execute(
+                pg_insert(Entity)
+                .values(
+                    id=uuid.uuid4(),
                     workspace_id=doc.workspace_id,
                     name=name,
                     normalized_name=normalized,
                     entity_type=etype,
                 )
-                db.add(entity)
-                await db.flush()
+                .on_conflict_do_nothing(constraint="uq_entity_workspace")
+            )
+            entity_id = (
+                await db.execute(
+                    select(Entity.id).where(
+                        Entity.workspace_id == doc.workspace_id,
+                        Entity.normalized_name == normalized,
+                        Entity.entity_type == etype,
+                    )
+                )
+            ).scalar_one()
             db.add(
                 DocumentEntity(
-                    entity_id=entity.id,
+                    entity_id=entity_id,
                     document_id=doc.id,
                     mention_text=name,
                     confidence=0.5,

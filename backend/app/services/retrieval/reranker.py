@@ -1,35 +1,60 @@
-"""Cross-encoder style reranker with pluggable backends."""
+"""Second-stage reranking of fused candidates.
+
+- ``LexicalReranker`` (default): blends the fused retrieval score with query
+  term coverage, density and bigram matches. Cheap and, on our evaluation over
+  technical documentation, the most accurate option (see evaluation/).
+- ``CrossEncoderReranker`` (optional): MS MARCO MiniLM via fastembed/ONNX.
+  It reads query and passage jointly, but was trained on web search queries:
+  on our eval it lost to the lexical reranker (R@5 0.85 vs 0.93) and costs
+  ~2.8 s per query on CPU for 20 full-size chunks. Logits are sigmoid-squashed
+  into (0, 1).
+"""
 
 from __future__ import annotations
 
+import asyncio
 import math
+import threading
 from collections import Counter
+from dataclasses import replace
+from typing import Any, Protocol
 
 from app.core.config import get_settings
+from app.services.monitoring.logger import get_logger
 from app.services.retrieval.hybrid_search import ScoredChunk, tokenize
+
+log = get_logger("veritas.reranker")
+
+
+class Reranker(Protocol):
+    name: str
+
+    async def rerank(
+        self, query: str, candidates: list[ScoredChunk], top_k: int = 8
+    ) -> list[ScoredChunk]: ...
+
+
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + math.exp(-x))
 
 
 class LexicalReranker:
-    """Lightweight lexical cross-encoder stand-in (default / mock-friendly)."""
+    """Fused score blended with query-term coverage, density and bigram matches."""
 
-    def rerank(self, query: str, candidates: list[ScoredChunk], top_k: int = 8) -> list[ScoredChunk]:
-        scored: list[ScoredChunk] = []
-        for c in candidates:
-            lexical = self._pair_score(query, c.chunk.content)
-            new_score = 0.45 * c.score + 0.55 * lexical
-            scored.append(
-                ScoredChunk(
-                    chunk=c.chunk,
-                    document=c.document,
-                    score=new_score,
-                    vector_score=c.vector_score,
-                    bm25_score=c.bm25_score,
-                )
-            )
+    name = "lexical"
+
+    async def rerank(
+        self, query: str, candidates: list[ScoredChunk], top_k: int = 8
+    ) -> list[ScoredChunk]:
+        scored = [
+            replace(c, score=0.45 * c.score + 0.55 * self._pair_score(query, c.chunk.content))
+            for c in candidates
+        ]
         scored.sort(key=lambda x: x.score, reverse=True)
         return scored[:top_k]
 
-    def _pair_score(self, query: str, passage: str) -> float:
+    @staticmethod
+    def _pair_score(query: str, passage: str) -> float:
         q = tokenize(query)
         p = tokenize(passage)
         if not q or not p:
@@ -39,56 +64,54 @@ class LexicalReranker:
         overlap = sum(min(1, p_counts[t]) for t in q_set)
         coverage = overlap / len(q_set)
         density = overlap / math.sqrt(len(p))
-        bigram_boost = 0.0
         passage_lower = passage.lower()
-        for i in range(len(q) - 1):
-            phrase = f"{q[i]} {q[i + 1]}"
-            if phrase in passage_lower:
-                bigram_boost += 0.1
+        bigram_boost = sum(0.1 for i in range(len(q) - 1) if f"{q[i]} {q[i + 1]}" in passage_lower)
         return min(1.0, coverage * 0.7 + density * 0.2 + bigram_boost)
 
 
 class CrossEncoderReranker:
-    """
-    Optional sentence-transformers CrossEncoder backend.
+    """fastembed TextCrossEncoder; inference runs in a worker thread."""
 
-    Falls back to lexical scoring when the model package/weights are unavailable
-    or when settings.reranker_backend != cross_encoder.
-    """
+    name = "cross_encoder"
+    _models: dict[str, Any] = {}
+    _lock = threading.Lock()
 
-    def __init__(self) -> None:
-        self.settings = get_settings()
-        self._lexical = LexicalReranker()
-        self._model = None
-        if self.settings.reranker_backend == "cross_encoder":
-            self._model = self._try_load_model()
+    def __init__(self, model_name: str | None = None, cache_dir: str | None = None) -> None:
+        settings = get_settings()
+        self.model_name = model_name or settings.reranker_model
+        self.cache_dir = cache_dir or settings.model_cache_dir or None
 
-    def _try_load_model(self):
+    def _model(self) -> Any:
+        with self._lock:
+            model = self._models.get(self.model_name)
+            if model is None:
+                from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+                model = TextCrossEncoder(self.model_name, cache_dir=self.cache_dir)
+                self._models[self.model_name] = model
+            return model
+
+    def _score_sync(self, query: str, passages: list[str]) -> list[float]:
+        return [_sigmoid(float(s)) for s in self._model().rerank(query, passages)]
+
+    async def rerank(
+        self, query: str, candidates: list[ScoredChunk], top_k: int = 8
+    ) -> list[ScoredChunk]:
+        if not candidates:
+            return []
+        passages = [c.chunk.content for c in candidates]
         try:
-            from sentence_transformers import CrossEncoder  # type: ignore
-
-            return CrossEncoder(self.settings.reranker_model)
-        except Exception:
-            return None
-
-    def rerank(self, query: str, candidates: list[ScoredChunk], top_k: int = 8) -> list[ScoredChunk]:
-        if self._model is None or not candidates:
-            return self._lexical.rerank(query, candidates, top_k=top_k)
-        pairs = [(query, c.chunk.content) for c in candidates]
-        try:
-            scores = self._model.predict(pairs)
-        except Exception:
-            return self._lexical.rerank(query, candidates, top_k=top_k)
-        scored: list[ScoredChunk] = []
-        for c, s in zip(candidates, scores):
-            scored.append(
-                ScoredChunk(
-                    chunk=c.chunk,
-                    document=c.document,
-                    score=float(s),
-                    vector_score=c.vector_score,
-                    bm25_score=c.bm25_score,
-                )
-            )
+            scores = await asyncio.to_thread(self._score_sync, query, passages)
+        except Exception as exc:  # noqa: BLE001 - degrade loudly, never fail the request
+            log.warning("reranker.cross_encoder_failed", model=self.model_name, error=str(exc))
+            return await LexicalReranker().rerank(query, candidates, top_k=top_k)
+        scored = [replace(c, score=s) for c, s in zip(candidates, scores)]
         scored.sort(key=lambda x: x.score, reverse=True)
         return scored[:top_k]
+
+
+def build_reranker() -> Reranker:
+    """Model weights load lazily on first use, not at import/startup."""
+    if get_settings().reranker_backend == "cross_encoder":
+        return CrossEncoderReranker()
+    return LexicalReranker()

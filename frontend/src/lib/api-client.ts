@@ -56,6 +56,30 @@ export interface Citation {
   citation_index: number;
 }
 
+export interface TraceSource {
+  chunk_id: string;
+  document: string;
+  page?: number | null;
+  fused_score: number;
+  vector_score: number;
+  keyword_score: number;
+  final_score: number;
+}
+
+/** How an answer was retrieved (stored with the message, see orchestrator.py). */
+export interface RetrievalTrace {
+  question: string;
+  standalone_query: string;
+  queries: string[];
+  used_hyde: boolean;
+  reranker: string;
+  candidates: number;
+  top_score: number | null;
+  abstained: boolean;
+  timings_ms: Record<string, number>;
+  sources: TraceSource[];
+}
+
 export interface Message {
   id: string;
   thread_id: string;
@@ -63,6 +87,11 @@ export interface Message {
   content: string;
   citations?: Citation[] | null;
   feedback?: string | null;
+  token_usage?: {
+    status?: "complete" | "interrupted" | "error";
+    abstained?: boolean;
+    trace?: RetrievalTrace | null;
+  } | null;
   created_at: string;
 }
 
@@ -314,20 +343,6 @@ async function request<T>(
 }
 
 export const api = {
-  /** @deprecated Prefer Better Auth signUp/signIn — kept for scripts/tests */
-  register: (body: { email: string; password: string; full_name: string }) =>
-    request<{ access_token: string; refresh_token: string }>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  /** @deprecated Prefer Better Auth signIn — kept for scripts/tests */
-  login: (body: { email: string; password: string }) =>
-    request<{ access_token: string; refresh_token: string }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
   me: () => request<User>("/auth/me"),
 
   /** Ensure Veritas user exists after Better Auth signup/login */
@@ -645,10 +660,15 @@ export async function streamChat(
       answer: string;
       citations: Citation[];
       latency_ms: number;
+      abstained?: boolean;
+      trace?: RetrievalTrace;
     }) => void;
     onMessage?: (data: { message_id: string; thread_id: string }) => void;
+    /** Server-side failure mid-stream (the partial answer, if any, is saved). */
+    onStreamError?: (data: { message: string; partial: boolean }) => void;
     onError?: (err: Error) => void;
   },
+  signal?: AbortSignal,
 ): Promise<void> {
   const token = getToken();
   const res = await fetch(`${API_BASE}/workspaces/${workspaceId}/chat/stream`, {
@@ -658,6 +678,7 @@ export async function streamChat(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok || !res.body) {
@@ -698,6 +719,7 @@ export async function streamChat(
         if (event === "token") handlers.onToken?.(parsed.token);
         if (event === "done") handlers.onDone?.(parsed);
         if (event === "message") handlers.onMessage?.(parsed);
+        if (event === "error") handlers.onStreamError?.(parsed);
       } catch (err) {
         handlers.onError?.(err as Error);
       }

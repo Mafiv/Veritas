@@ -35,11 +35,12 @@ export default function DocumentsPage() {
 
   const load = useCallback(async () => {
     if (!workspace) return;
-    setLoading(true);
-    setError(null);
+    // No synchronous setState here: this runs from an effect on mount.
+    // Initial `loading` is already true; refreshes keep showing current rows.
     try {
       const res = await api.listDocuments(workspace.id);
       setDocs(res.items);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load documents");
     } finally {
@@ -48,7 +49,9 @@ export default function DocumentsPage() {
   }, [workspace]);
 
   useEffect(() => {
-    load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   // Poll ingestion status for non-ready docs

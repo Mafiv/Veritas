@@ -14,7 +14,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -22,18 +21,18 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     JSONType,
     PlanTier,
     SubscriptionStatus,
     TimestampMixin,
-    UsageEventType,
     UUID,
     new_uuid,
 )
 
 if TYPE_CHECKING:
-    from app.models.domain.identity import User, Workspace
+    from app.models.domain.identity import User
 
 
 class Plan(Base, TimestampMixin):
@@ -43,7 +42,7 @@ class Plan(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     code: Mapped[PlanTier] = mapped_column(
-        Enum(PlanTier, name="plan_tier", create_constraint=False),
+        Enum(PlanTier, values_callable=enum_values, name="plan_tier", create_constraint=False),
         unique=True,
         nullable=False,
     )
@@ -84,7 +83,7 @@ class Subscription(Base, TimestampMixin):
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     status: Mapped[SubscriptionStatus] = mapped_column(
-        Enum(SubscriptionStatus, name="subscription_status"),
+        Enum(SubscriptionStatus, values_callable=enum_values, name="subscription_status"),
         default=SubscriptionStatus.ACTIVE,
         nullable=False,
     )
@@ -136,9 +135,7 @@ class UsageMeter(Base, TimestampMixin):
 
     __tablename__ = "usage_meters"
     __table_args__ = (
-        UniqueConstraint(
-            "workspace_id", "meter_key", "period_start", name="uq_usage_meter_period"
-        ),
+        UniqueConstraint("workspace_id", "meter_key", "period_start", name="uq_usage_meter_period"),
         Index("ix_usage_meters_workspace_period", "workspace_id", "period_start"),
     )
 

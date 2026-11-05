@@ -17,6 +17,15 @@ from app.db.session import Base
 JSONType = JSON().with_variant(JSONB(), "postgresql")
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """Persist enum *values* (e.g. "free"), matching the Alembic-created types.
+
+    SQLAlchemy's default is the member *name* ("FREE"), which does not exist in
+    the Postgres enums created by the migrations.
+    """
+    return [str(member.value) for member in enum_cls]
+
+
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
 

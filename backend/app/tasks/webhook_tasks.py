@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime, timezone
 from uuid import UUID
@@ -11,30 +10,21 @@ import httpx
 from sqlalchemy import select
 
 from app.tasks.celery_app import celery_app
-
-
-def _run(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            return asyncio.run(coro)
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
+from app.tasks.runtime import run_async
 
 
 @celery_app.task(name="app.tasks.webhook_tasks.deliver_pending_webhooks")
 def deliver_pending_webhooks(limit: int = 50) -> dict:
-    return _run(_deliver_pending(limit))
+    return run_async(_deliver_pending(limit))
 
 
 async def _deliver_pending(limit: int) -> dict:
-    from app.db.session import AsyncSessionLocal
+    from app.tasks.runtime import worker_session
     from app.models.domain import WebhookDelivery, WebhookDeliveryStatus, WebhookEndpoint
 
     sent = 0
     failed = 0
-    async with AsyncSessionLocal() as session:
+    async with worker_session() as session:
         result = await session.execute(
             select(WebhookDelivery)
             .where(WebhookDelivery.status == WebhookDeliveryStatus.PENDING)
@@ -86,26 +76,30 @@ async def _deliver_pending(limit: int) -> dict:
 @celery_app.task(name="app.tasks.webhook_tasks.rollup_usage_meters")
 def rollup_usage_meters() -> dict:
     """Ensure daily meters exist for workspaces with recent usage events."""
-    return _run(_rollup_meters())
+    return run_async(_rollup_meters())
 
 
 async def _rollup_meters() -> dict:
     from datetime import timedelta
 
-    from app.db.session import AsyncSessionLocal
+    from app.tasks.runtime import worker_session
     from app.models.domain import UsageEvent, UsageMeter
 
     now = datetime.now(timezone.utc)
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    async with AsyncSessionLocal() as session:
+    async with worker_session() as session:
         events = (
-            await session.execute(
-                select(UsageEvent).where(
-                    UsageEvent.created_at >= start,
-                    UsageEvent.workspace_id.is_not(None),
+            (
+                await session.execute(
+                    select(UsageEvent).where(
+                        UsageEvent.created_at >= start,
+                        UsageEvent.workspace_id.is_not(None),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         # Rebuild today's query meters from events (idempotent-ish: set absolute)
         totals: dict[tuple, int] = {}
         for e in events:
@@ -141,22 +135,26 @@ async def _rollup_meters() -> dict:
 
 @celery_app.task(name="app.tasks.webhook_tasks.run_retention_purge_all")
 def run_retention_purge_all() -> dict:
-    return _run(_purge_all())
+    return run_async(_purge_all())
 
 
 async def _purge_all() -> dict:
-    from app.db.session import AsyncSessionLocal
+    from app.tasks.runtime import worker_session
     from app.models.domain import DataRetentionPolicy
     from app.services.compliance.service import apply_retention_purge
 
-    async with AsyncSessionLocal() as session:
+    async with worker_session() as session:
         ws_ids = (
-            await session.execute(
-                select(DataRetentionPolicy.workspace_id)
-                .where(DataRetentionPolicy.is_active.is_(True))
-                .distinct()
+            (
+                await session.execute(
+                    select(DataRetentionPolicy.workspace_id)
+                    .where(DataRetentionPolicy.is_active.is_(True))
+                    .distinct()
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         results = []
         for ws_id in ws_ids:
             results.append(await apply_retention_purge(session, ws_id))
@@ -166,14 +164,14 @@ async def _purge_all() -> dict:
 
 @celery_app.task(name="app.tasks.webhook_tasks.run_export_job")
 def run_export_job_task(job_id: str) -> dict:
-    return _run(_run_export(UUID(job_id)))
+    return run_async(_run_export(UUID(job_id)))
 
 
 async def _run_export(job_id: UUID) -> dict:
-    from app.db.session import AsyncSessionLocal
+    from app.tasks.runtime import worker_session
     from app.services.compliance.service import run_export_job
 
-    async with AsyncSessionLocal() as session:
+    async with worker_session() as session:
         job = await run_export_job(session, job_id)
         await session.commit()
         return {"job_id": str(job.id), "status": job.status.value}

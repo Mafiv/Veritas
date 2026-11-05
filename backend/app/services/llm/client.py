@@ -16,6 +16,7 @@ _PROVIDER_API_KEYS: dict[str, str] = {
     "gemini": "gemini_api_key",
     "github": "github_api_key",
     "anthropic": "anthropic_api_key",
+    "deepseek": "deepseek_api_key",
 }
 
 # GitHub Models OpenAI-compatible endpoint (LiteLLM mishandles gpt-5 max tokens).
@@ -174,9 +175,7 @@ class LLMClient:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 last_error = ""
                 for attempt in range(max_attempts):
-                    resp = await client.post(
-                        _GITHUB_MODELS_URL, headers=headers, json=body
-                    )
+                    resp = await client.post(_GITHUB_MODELS_URL, headers=headers, json=body)
                     if resp.status_code == 429:
                         retry_after = resp.headers.get("retry-after")
                         try:
@@ -194,11 +193,7 @@ class LLMClient:
                             f"GitHub Models HTTP {resp.status_code}: {resp.text[:400]}"
                         )
                     data = resp.json()
-                    content = (
-                        data.get("choices", [{}])[0]
-                        .get("message", {})
-                        .get("content")
-                    )
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content")
                     if not content:
                         raise LLMProviderError(
                             f"Empty response from GitHub Models model '{api_model}'"
@@ -303,6 +298,7 @@ class LLMClient:
                     citations.append(i)
             cite = "".join(f"[{i}]" for i in citations[:3]) or "[1]"
             question = user.split("Question:")[-1].strip() if "Question:" in user else user
+            question = question.split("\n\n")[0]  # drop trailing prompt instructions
             return (
                 f"Based on the provided source material{cite}, here is a grounded answer "
                 f"to your question.\n\n"

@@ -10,8 +10,8 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
-from app.core.exceptions import VeritasError, error_payload
-from app.db.session import Base, engine
+from app.core.exceptions import RateLimitError, VeritasError, error_payload
+from app.db.session import engine
 from app.models import domain  # noqa: F401 — register models
 from app.models.schemas import HealthResponse
 from app.services.monitoring.logger import get_logger, setup_logging
@@ -24,9 +24,7 @@ async def lifespan(app: FastAPI):
     log = get_logger()
     log.info("veritas.startup", env=settings.app_env, mock_llm=settings.use_mock_llm)
 
-    # Auto-create tables for development (Alembic for production)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Schema is owned by Alembic (`alembic upgrade head`); never create_all here.
 
     yield
     await engine.dispose()
@@ -52,7 +50,12 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(VeritasError)
     async def veritas_error_handler(_: Request, exc: VeritasError):
-        return JSONResponse(status_code=exc.status_code, content=error_payload(exc))
+        headers = None
+        if isinstance(exc, RateLimitError) and exc.retry_after:
+            headers = {"Retry-After": str(exc.retry_after)}
+        return JSONResponse(
+            status_code=exc.status_code, content=error_payload(exc), headers=headers
+        )
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     async def health() -> HealthResponse:

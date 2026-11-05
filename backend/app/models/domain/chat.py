@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     FeedbackVote,
     JSONType,
@@ -30,8 +31,7 @@ from app.models.domain.base import (
 )
 
 if TYPE_CHECKING:
-    from app.models.domain.documents import Document, DocumentChunk
-    from app.models.domain.identity import User, Workspace
+    from app.models.domain.identity import Workspace
 
 
 class ChatThread(Base, TimestampMixin, SoftDeleteMixin):
@@ -69,9 +69,7 @@ class ChatThreadDocument(Base, TimestampMixin):
     """Optional retrieval scope: which documents a thread may search."""
 
     __tablename__ = "chat_thread_documents"
-    __table_args__ = (
-        UniqueConstraint("thread_id", "document_id", name="uq_thread_document"),
-    )
+    __table_args__ = (UniqueConstraint("thread_id", "document_id", name="uq_thread_document"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     thread_id: Mapped[uuid.UUID] = mapped_column(
@@ -93,7 +91,7 @@ class ChatMessage(Base, TimestampMixin):
         ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[MessageRole] = mapped_column(
-        Enum(MessageRole, name="message_role"), nullable=False
+        Enum(MessageRole, values_callable=enum_values, name="message_role"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Legacy JSON blob — normalized into message_citations / message_feedback.
@@ -157,7 +155,7 @@ class MessageFeedback(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     vote: Mapped[FeedbackVote] = mapped_column(
-        Enum(FeedbackVote, name="feedback_vote"), nullable=False
+        Enum(FeedbackVote, values_callable=enum_values, name="feedback_vote"), nullable=False
     )
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

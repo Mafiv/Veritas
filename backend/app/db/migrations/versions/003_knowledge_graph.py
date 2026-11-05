@@ -42,8 +42,18 @@ def upgrade() -> None:
         sa.Column("normalized_name", sa.String(300), nullable=False),
         sa.Column("entity_type", entity_type, nullable=False),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.UniqueConstraint(
             "workspace_id", "normalized_name", "entity_type", name="uq_entity_workspace"
@@ -62,8 +72,18 @@ def upgrade() -> None:
         sa.Column("start_offset", sa.Integer(), nullable=True),
         sa.Column("end_offset", sa.Integer(), nullable=True),
         sa.Column("confidence", sa.Float(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["entity_id"], ["entities.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["chunk_id"], ["document_chunks.id"], ondelete="CASCADE"),
@@ -82,8 +102,18 @@ def upgrade() -> None:
         sa.Column("weight", sa.Float(), nullable=False, server_default="1.0"),
         sa.Column("evidence_chunk_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["from_entity_id"], ["entities.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["to_entity_id"], ["entities.id"], ondelete="CASCADE"),
@@ -93,7 +123,9 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint("from_entity_id <> to_entity_id", name="ck_entity_rel_no_self"),
     )
-    op.create_index("ix_entity_relationships_workspace_id", "entity_relationships", ["workspace_id"])
+    op.create_index(
+        "ix_entity_relationships_workspace_id", "entity_relationships", ["workspace_id"]
+    )
     op.create_index("ix_entity_relationships_from", "entity_relationships", ["from_entity_id"])
     op.create_index("ix_entity_relationships_to", "entity_relationships", ["to_entity_id"])
 

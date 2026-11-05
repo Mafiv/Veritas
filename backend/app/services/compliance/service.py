@@ -125,15 +125,11 @@ async def upsert_retention(
     return row
 
 
-async def list_retention(
-    db: AsyncSession, workspace_id: UUID
-) -> list[DataRetentionPolicy]:
+async def list_retention(db: AsyncSession, workspace_id: UUID) -> list[DataRetentionPolicy]:
     return list(
         (
             await db.execute(
-                select(DataRetentionPolicy).where(
-                    DataRetentionPolicy.workspace_id == workspace_id
-                )
+                select(DataRetentionPolicy).where(DataRetentionPolicy.workspace_id == workspace_id)
             )
         )
         .scalars()
@@ -202,13 +198,17 @@ async def run_export_job(db: AsyncSession, job_id: UUID) -> ExportJob:
     if job.workspace_id:
         ws = await db.get(Workspace, job.workspace_id)
         docs = (
-            await db.execute(
-                select(Document).where(
-                    Document.workspace_id == job.workspace_id,
-                    Document.deleted_at.is_(None),
+            (
+                await db.execute(
+                    select(Document).where(
+                        Document.workspace_id == job.workspace_id,
+                        Document.deleted_at.is_(None),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         payload["workspace"] = {
             "id": str(ws.id) if ws else str(job.workspace_id),
             "name": ws.name if ws else None,
@@ -247,14 +247,18 @@ async def apply_retention_purge(db: AsyncSession, workspace_id: UUID) -> dict:
             continue
         cutoff = now - timedelta(days=policy.retain_days)
         docs = (
-            await db.execute(
-                select(Document).where(
-                    Document.workspace_id == workspace_id,
-                    Document.deleted_at.is_(None),
-                    Document.created_at < cutoff,
+            (
+                await db.execute(
+                    select(Document).where(
+                        Document.workspace_id == workspace_id,
+                        Document.deleted_at.is_(None),
+                        Document.created_at < cutoff,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for doc in docs:
             doc.deleted_at = now
             purged += 1

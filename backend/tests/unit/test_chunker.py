@@ -1,13 +1,22 @@
 """Unit tests for semantic chunker."""
 
-from app.services.ingestion.chunker import chunk_document, estimate_tokens
+from app.services.ingestion.chunker import chunk_document, contextualize, estimate_tokens
 from app.services.ingestion.parser import ParsedDocument, ParsedPage
 from app.models.domain import DocumentType
 
 
-def test_estimate_tokens():
-    assert estimate_tokens("abcd") == 1
-    assert estimate_tokens("a" * 40) == 10
+def test_estimate_tokens_uses_real_tokenizer():
+    assert estimate_tokens("hello world") == 2  # cl100k: "hello", " world"
+    assert estimate_tokens("") == 1  # never zero, keeps budgets well-defined
+    # Long words split into several tokens; the old len/4 heuristic could not see that.
+    assert estimate_tokens("antidisestablishmentarianism") > 1
+
+
+def test_contextualize_prefixes_title_and_heading():
+    assert (
+        contextualize("Handbook.pdf", "Leave", "Ten days.") == "Handbook.pdf — Leave\n\nTen days."
+    )
+    assert contextualize(None, None, "Plain.") == "Plain."
 
 
 def test_chunk_respects_paragraph_boundaries():

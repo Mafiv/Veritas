@@ -1,0 +1,63 @@
+{
+  "name": "veritas-peps-v1",
+  "description": "Retrieval questions over 10 public-domain Python PEPs. A retrieved chunk is relevant when it comes from `doc` and contains `evidence` (whitespace-normalised, case-insensitive). `style` is 'lexical' when the question reuses the source's wording and 'paraphrase' when it deliberately does not. Questions with doc=null are not answerable from the corpus and are used to calibrate abstention.",
+  "questions": [
+    {"id": "pep8-line-length", "doc": "pep-0008.txt", "style": "lexical", "question": "What is the maximum line length PEP 8 recommends for code?", "evidence": "Limit all lines to a maximum of 79 characters"},
+    {"id": "pep8-docstring-width", "doc": "pep-0008.txt", "style": "paraphrase", "question": "How wide should comments and docstrings be wrapped, as opposed to code?", "evidence": "limited to 72 characters"},
+    {"id": "pep8-indent", "doc": "pep-0008.txt", "style": "lexical", "question": "How many spaces per indentation level does the style guide use?", "evidence": "Use 4 spaces per indentation level"},
+    {"id": "pep8-tabs", "doc": "pep-0008.txt", "style": "paraphrase", "question": "Should I indent with tabs or with spaces?", "evidence": "Spaces are the preferred indentation method"},
+    {"id": "pep8-blank-lines", "doc": "pep-0008.txt", "style": "paraphrase", "question": "How much vertical whitespace goes between top-level functions and classes?", "evidence": "Surround top-level function and class definitions with two blank lines"},
+    {"id": "pep8-import-order", "doc": "pep-0008.txt", "style": "paraphrase", "question": "In what order should groups of imports be listed?", "evidence": "Standard library imports"},
+    {"id": "pep8-ambiguous-names", "doc": "pep-0008.txt", "style": "paraphrase", "question": "Which single letters are bad variable names because they look like the digits one and zero?", "evidence": "Never use the characters 'l'"},
+    {"id": "pep8-none-compare", "doc": "pep-0008.txt", "style": "lexical", "question": "How should comparisons to None be written?", "evidence": "Comparisons to singletons like None should always be done with"},
+    {"id": "pep8-startswith", "doc": "pep-0008.txt", "style": "paraphrase", "question": "What should I use instead of slicing a string to check its prefix?", "evidence": "instead of string slicing"},
+    {"id": "pep8-constants", "doc": "pep-0008.txt", "style": "lexical", "question": "How are constants named and where are they defined?", "evidence": "Constants are usually defined on a module level"},
+    {"id": "pep8-encoding", "doc": "pep-0008.txt", "style": "paraphrase", "question": "Which source file encoding should code in the core distribution use?", "evidence": "should always use UTF-8"},
+    {"id": "pep8-bare-except", "doc": "pep-0008.txt", "style": "paraphrase", "question": "Why is catching every exception without naming a type discouraged?", "evidence": "a bare ``except:`` clause"},
+
+    {"id": "pep20-errors", "doc": "pep-0020.txt", "style": "paraphrase", "question": "What does the Zen of Python say about failures being ignored quietly?", "evidence": "Errors should never pass silently"},
+    {"id": "pep20-one-way", "doc": "pep-0020.txt", "style": "lexical", "question": "How many obvious ways should there be to do something?", "evidence": "preferably only one --obvious way to do it"},
+    {"id": "pep20-namespaces", "doc": "pep-0020.txt", "style": "lexical", "question": "What does the Zen of Python call one honking great idea?", "evidence": "Namespaces are one honking great idea"},
+
+    {"id": "pep257-quotes", "doc": "pep-0257.txt", "style": "lexical", "question": "Which quote style should docstrings use?", "evidence": "triple double quotes"},
+    {"id": "pep257-phrase", "doc": "pep-0257.txt", "style": "paraphrase", "question": "Should a one-line docstring be written as a command ending with a full stop?", "evidence": "The docstring is a phrase ending in a period"},
+    {"id": "pep257-multiline", "doc": "pep-0257.txt", "style": "paraphrase", "question": "How is a longer docstring structured after its first line?", "evidence": "followed by a blank line, followed by a more elaborate"},
+    {"id": "pep257-oneline-blank", "doc": "pep-0257.txt", "style": "lexical", "question": "Is there a blank line before or after a one-line docstring?", "evidence": "There's no blank line either before or after the docstring"},
+
+    {"id": "pep405-config-file", "doc": "pep-0405.txt", "style": "paraphrase", "question": "Which file marks a directory as a lightweight virtual environment?", "evidence": "pyvenv.cfg"},
+    {"id": "pep405-system-site", "doc": "pep-0405.txt", "style": "paraphrase", "question": "How can a virtual environment also see the globally installed packages?", "evidence": "include-system-site-packages"},
+    {"id": "pep405-base-prefix", "doc": "pep-0405.txt", "style": "lexical", "question": "Which sys attribute points at the base installation's prefix inside a venv?", "evidence": "sys.base_prefix"},
+
+    {"id": "pep498-backslash", "doc": "pep-0498.txt", "style": "paraphrase", "question": "Can escape characters be used inside the braces of an f-string?", "evidence": "Backslashes may not appear inside the expression portions"},
+    {"id": "pep498-conversions", "doc": "pep-0498.txt", "style": "lexical", "question": "Which conversion flags like !r are allowed in f-strings?", "evidence": "The allowed conversions are"},
+    {"id": "pep498-runtime", "doc": "pep-0498.txt", "style": "paraphrase", "question": "Are formatted string literals constant values or computed when the program runs?", "evidence": "evaluated at run time"},
+    {"id": "pep498-motivation", "doc": "pep-0498.txt", "style": "paraphrase", "question": "What existing string formatting mechanisms motivated adding a new one?", "evidence": "``string.Template``"},
+
+    {"id": "pep518-why-toml", "doc": "pep-0518.txt", "style": "paraphrase", "question": "Why was TOML picked over JSON for the build configuration file?", "evidence": "human-usable (unlike JSON"},
+    {"id": "pep518-setup-requires", "doc": "pep-0518.txt", "style": "lexical", "question": "What was wrong with setuptools' setup_requires argument?", "evidence": "get implicitly installed"},
+    {"id": "pep518-tool-table", "doc": "pep-0518.txt", "style": "paraphrase", "question": "Where can individual tools such as linters keep their own settings in pyproject.toml?", "evidence": "``[tool]`` table"},
+
+    {"id": "pep572-syntax", "doc": "pep-0572.txt", "style": "paraphrase", "question": "What is the syntax of the walrus operator for assigning inside an expression?", "evidence": "NAME := expr"},
+    {"id": "pep572-toplevel", "doc": "pep-0572.txt", "style": "lexical", "question": "Are unparenthesized assignment expressions allowed at the top level of an expression statement?", "evidence": "Unparenthesized assignment expressions are prohibited at the top level of an expression statement"},
+    {"id": "pep572-while-read", "doc": "pep-0572.txt", "style": "paraphrase", "question": "Show an example of reading a file in fixed-size pieces in a loop condition.", "evidence": "while chunk := file.read(8192)"},
+    {"id": "pep572-comprehension", "doc": "pep-0572.txt", "style": "paraphrase", "question": "How can a comprehension reuse a computed value in both its filter and its output?", "evidence": "Share a subexpression between a comprehension filter clause and its output"},
+
+    {"id": "pep621-name", "doc": "pep-0621.txt", "style": "lexical", "question": "Which field gives the name of the project in the [project] table?", "evidence": "The name of the project"},
+    {"id": "pep621-dynamic", "doc": "pep-0621.txt", "style": "paraphrase", "question": "Why must metadata that a build backend fills in later be declared explicitly?", "evidence": "the distinction between static and dynamic metadata"},
+    {"id": "pep621-requires-python", "doc": "pep-0621.txt", "style": "lexical", "question": "How do I declare which Python versions a project supports?", "evidence": "``requires-python``"},
+
+    {"id": "pep636-wildcard", "doc": "pep-0636.txt", "style": "paraphrase", "question": "Which pattern matches anything as a catch-all case in a match statement?", "evidence": "and called wildcard) always"},
+    {"id": "pep636-guard", "doc": "pep-0636.txt", "style": "lexical", "question": "What is a guard in a match case?", "evidence": "Guards consist of the ``if`` keyword followed by any expression"},
+    {"id": "pep636-or-pattern", "doc": "pep-0636.txt", "style": "paraphrase", "question": "How can one case accept several alternative patterns?", "evidence": "symbol in patterns combines them as alternatives"},
+
+    {"id": "pep3107-attribute", "doc": "pep-3107.txt", "style": "paraphrase", "question": "Where are a function's annotations stored at runtime?", "evidence": "function's ``__annotations__`` attribute"},
+    {"id": "pep3107-lambda", "doc": "pep-3107.txt", "style": "lexical", "question": "Do lambdas support annotations?", "evidence": "``lambda``'s syntax does not support annotations"},
+
+    {"id": "na-gil", "doc": null, "style": "unanswerable", "question": "How do I disable the global interpreter lock at runtime?", "evidence": null},
+    {"id": "na-django", "doc": null, "style": "unanswerable", "question": "How do I configure Django's database connection pooling?", "evidence": null},
+    {"id": "na-asyncio-timeout", "doc": null, "style": "unanswerable", "question": "What is the default timeout of asyncio.wait_for?", "evidence": null},
+    {"id": "na-refund", "doc": null, "style": "unanswerable", "question": "What is the company refund policy for annual subscriptions?", "evidence": null},
+    {"id": "na-numpy", "doc": null, "style": "unanswerable", "question": "How does NumPy broadcasting align array shapes?", "evidence": null},
+    {"id": "na-weather", "doc": null, "style": "unanswerable", "question": "Will it rain in Addis Ababa tomorrow?", "evidence": null}
+  ]
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowUp, Mic, Paperclip, Slash } from "lucide-react";
+import { ArrowUp, Mic, Paperclip, Slash, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -9,10 +9,13 @@ export function ChatComposer({
   onSend,
   disabled,
   onAttach,
+  onStop,
 }: {
   onSend: (question: string) => void;
   disabled?: boolean;
   onAttach?: () => void;
+  /** When set (an answer is streaming), the send button becomes a stop button. */
+  onStop?: () => void;
 }) {
   const [value, setValue] = useState("");
   const [listeningHint, setListeningHint] = useState(false);
@@ -103,16 +106,29 @@ export function ChatComposer({
                 <Slash className="h-4 w-4" />
               </Button>
             </div>
-            <Button
-              type="button"
-              size="icon"
-              className="btn-gradient h-10 w-10 rounded-full disabled:opacity-40"
-              onClick={submit}
-              disabled={disabled || !value.trim()}
-              aria-label="Send"
-            >
-              <ArrowUp className="h-4.5 w-4.5 h-[18px] w-[18px]" />
-            </Button>
+            {onStop ? (
+              <Button
+                type="button"
+                size="icon"
+                className="h-10 w-10 rounded-full bg-ink text-primary-foreground hover:bg-ink/90"
+                onClick={onStop}
+                aria-label="Stop generating"
+                title="Stop generating"
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="icon"
+                className="btn-gradient h-10 w-10 rounded-full disabled:opacity-40"
+                onClick={submit}
+                disabled={disabled || !value.trim()}
+                aria-label="Send"
+              >
+                <ArrowUp className="h-[18px] w-[18px]" />
+              </Button>
+            )}
           </div>
         </div>
         <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">

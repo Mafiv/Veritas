@@ -6,8 +6,10 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
+    Computed,
     DateTime,
     Enum,
     Float,
@@ -17,10 +19,13 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     DocumentStatus,
     DocumentType,
@@ -35,8 +40,11 @@ from app.models.domain.base import (
     new_uuid,
 )
 
+# Must match the vector(N) column created by migration 011.
+EMBEDDING_DIMENSIONS = 384
+
 if TYPE_CHECKING:
-    from app.models.domain.identity import User, Workspace
+    from app.models.domain.identity import Workspace
 
 
 class EmbeddingModel(Base, TimestampMixin):
@@ -72,10 +80,10 @@ class Document(Base, TimestampMixin, SoftDeleteMixin):
     original_filename: Mapped[str] = mapped_column(String(500), nullable=False)
     content_type: Mapped[str] = mapped_column(String(120), nullable=False)
     doc_type: Mapped[DocumentType] = mapped_column(
-        Enum(DocumentType, name="document_type"), nullable=False
+        Enum(DocumentType, values_callable=enum_values, name="document_type"), nullable=False
     )
     status: Mapped[DocumentStatus] = mapped_column(
-        Enum(DocumentStatus, name="document_status"),
+        Enum(DocumentStatus, values_callable=enum_values, name="document_status"),
         default=DocumentStatus.PENDING,
         index=True,
         nullable=False,
@@ -93,13 +101,20 @@ class Document(Base, TimestampMixin, SoftDeleteMixin):
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     meta: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
     active_version_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("document_versions.id", ondelete="SET NULL", use_alter=True, name="fk_documents_active_version"),
+        ForeignKey(
+            "document_versions.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_documents_active_version",
+        ),
         nullable=True,
     )
 
     workspace: Mapped["Workspace"] = relationship(back_populates="documents")
     chunks: Mapped[list[DocumentChunk]] = relationship(
-        back_populates="document", cascade="all, delete-orphan", foreign_keys="DocumentChunk.document_id"
+        back_populates="document",
+        cascade="all, delete-orphan",
+        foreign_keys="DocumentChunk.document_id",
     )
     versions: Mapped[list[DocumentVersion]] = relationship(
         back_populates="document",
@@ -127,6 +142,12 @@ class DocumentVersion(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("document_id", "version_number", name="uq_document_version_number"),
         Index("ix_document_versions_document_id", "document_id"),
+        Index(
+            "uq_document_versions_one_active",
+            "document_id",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
@@ -144,9 +165,7 @@ class DocumentVersion(Base, TimestampMixin):
     change_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     meta: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
 
-    document: Mapped[Document] = relationship(
-        back_populates="versions", foreign_keys=[document_id]
-    )
+    document: Mapped[Document] = relationship(back_populates="versions", foreign_keys=[document_id])
 
 
 class DocumentChunk(Base, TimestampMixin):
@@ -155,7 +174,17 @@ class DocumentChunk(Base, TimestampMixin):
     __tablename__ = "document_chunks"
     __table_args__ = (
         Index("ix_document_chunks_workspace_document", "workspace_id", "document_id"),
-        UniqueConstraint("document_id", "chunk_index", "document_version_id", name="uq_chunk_index_version"),
+        UniqueConstraint(
+            "document_id", "chunk_index", "document_version_id", name="uq_chunk_index_version"
+        ),
+        Index(
+            "ix_document_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        Index("ix_document_chunks_content_tsv", "content_tsv", postgresql_using="gin"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
@@ -173,8 +202,19 @@ class DocumentChunk(Base, TimestampMixin):
     token_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     heading: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    # Embedding as JSON for portability; pgvector upgrade is a later migration.
-    embedding: Mapped[Optional[list]] = mapped_column(JSONType, nullable=True)
+    # pgvector column (HNSW-indexed). Width must match settings.embedding_dimensions.
+    embedding: Mapped[Optional[list[float]]] = mapped_column(
+        Vector(EMBEDDING_DIMENSIONS), nullable=True
+    )
+    # Generated by Postgres for keyword search (GIN-indexed); never written by the app.
+    content_tsv: Mapped[Optional[str]] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english', coalesce(heading, '') || ' ' || content)",
+            persisted=True,
+        ),
+        nullable=True,
+    )
     embedding_model_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("embedding_models.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -222,9 +262,7 @@ class DocumentPermission(Base, TimestampMixin):
     """Granular page/section ACL beyond workspace role."""
 
     __tablename__ = "document_permissions"
-    __table_args__ = (
-        Index("ix_document_permissions_document_user", "document_id", "user_id"),
-    )
+    __table_args__ = (Index("ix_document_permissions_document_user", "document_id", "user_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     document_id: Mapped[uuid.UUID] = mapped_column(
@@ -237,7 +275,7 @@ class DocumentPermission(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     scope: Mapped[PermissionScope] = mapped_column(
-        Enum(PermissionScope, name="permission_scope"), nullable=False
+        Enum(PermissionScope, values_callable=enum_values, name="permission_scope"), nullable=False
     )
     page_start: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     page_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -292,7 +330,9 @@ class Entity(Base, TimestampMixin):
 
     __tablename__ = "entities"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "normalized_name", "entity_type", name="uq_entity_workspace"),
+        UniqueConstraint(
+            "workspace_id", "normalized_name", "entity_type", name="uq_entity_workspace"
+        ),
         Index("ix_entities_workspace_type", "workspace_id", "entity_type"),
     )
 
@@ -303,7 +343,7 @@ class Entity(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     normalized_name: Mapped[str] = mapped_column(String(300), nullable=False)
     entity_type: Mapped[EntityType] = mapped_column(
-        Enum(EntityType, name="entity_type"), nullable=False
+        Enum(EntityType, values_callable=enum_values, name="entity_type"), nullable=False
     )
     meta: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
 
@@ -368,6 +408,7 @@ class IngestionJob(Base, TimestampMixin):
 
     __tablename__ = "ingestion_jobs"
     __table_args__ = (
+        Index("ix_ingestion_jobs_document_id", "document_id"),
         Index("ix_ingestion_jobs_document_status", "document_id", "status"),
         Index("ix_ingestion_jobs_workspace_created", "workspace_id", "created_at"),
     )
@@ -384,12 +425,12 @@ class IngestionJob(Base, TimestampMixin):
     )
     celery_task_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
     status: Mapped[IngestionJobStatus] = mapped_column(
-        Enum(IngestionJobStatus, name="ingestion_job_status"),
+        Enum(IngestionJobStatus, values_callable=enum_values, name="ingestion_job_status"),
         default=IngestionJobStatus.QUEUED,
         nullable=False,
     )
     stage: Mapped[IngestionJobStage] = mapped_column(
-        Enum(IngestionJobStage, name="ingestion_job_stage"),
+        Enum(IngestionJobStage, values_callable=enum_values, name="ingestion_job_stage"),
         default=IngestionJobStage.PARSE,
         nullable=False,
     )

@@ -27,8 +27,14 @@ class ForbiddenError(VeritasError):
 
 
 class RateLimitError(VeritasError):
-    def __init__(self, message: str = "Rate limit exceeded", code: str = "rate_limit"):
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        code: str = "rate_limit",
+        retry_after: int | None = None,
+    ):
         super().__init__(message=message, code=code, status_code=429)
+        self.retry_after = retry_after
 
 
 class QuotaExceededError(VeritasError):

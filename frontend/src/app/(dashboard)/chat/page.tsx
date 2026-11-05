@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PanelRightOpen, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -80,22 +80,23 @@ export default function ChatPage() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  const workspaceId = workspace?.id;
+
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspaceId) return;
     let cancelled = false;
     (async () => {
-      setLoading(true);
-      setError(null);
       try {
         const [t, d, u] = await Promise.all([
-          api.listThreads(workspace.id),
-          api.listDocuments(workspace.id),
+          api.listThreads(workspaceId),
+          api.listDocuments(workspaceId),
           api.usage().catch(() => null),
         ]);
         if (cancelled) return;
         setThreads(t);
         setDocs(d.items);
         setUsage(u);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load chat");
       } finally {
@@ -105,14 +106,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspace?.id]);
-
-  // Auto-open sources when citations arrive; keep collapsed preference otherwise
-  useEffect(() => {
-    if (citations.length > 0) {
-      setSourcesCollapsed(false);
-    }
-  }, [citations.length]);
+  }, [workspaceId]);
 
   const readyDocs = useMemo(
     () => docs.filter((d) => d.status === "ready"),
@@ -152,10 +146,17 @@ export default function ChatPage() {
       const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant");
       if (lastAssistant?.citations?.length) {
         setCitations(lastAssistant.citations);
+        setSourcesCollapsed(false);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load thread");
     }
+  }
+
+  const abortRef = useRef<AbortController | null>(null);
+
+  function handleStop() {
+    abortRef.current?.abort();
   }
 
   async function handleSend(question: string) {
@@ -189,6 +190,8 @@ export default function ChatPage() {
     setSourcesCollapsed(false);
 
     let answer = "";
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       await streamChat(
@@ -210,13 +213,27 @@ export default function ChatPage() {
             updateLastAssistant({ content: answer, streaming: true });
           },
           onDone: (data) => {
+            // Final answer: hallucinated [n] markers removed, only cited sources kept.
             answer = data.answer;
             setCitations(data.citations);
             updateLastAssistant({
               content: data.answer,
               citations: data.citations,
               streaming: false,
+              token_usage: {
+                status: "complete",
+                abstained: data.abstained,
+                trace: data.trace ?? null,
+              },
             });
+          },
+          onStreamError: (data) => {
+            updateLastAssistant({
+              content: answer || data.message,
+              streaming: false,
+              token_usage: { status: "error" },
+            });
+            toast.error(data.message);
           },
           onMessage: (data) => {
             setThreadId(data.thread_id);
@@ -227,16 +244,27 @@ export default function ChatPage() {
             });
           },
         },
+        controller.signal,
       );
       const refreshed = await api.listThreads(workspace.id);
       setThreads(refreshed);
     } catch (err) {
+      if (controller.signal.aborted) {
+        // User pressed stop: keep what arrived; the server saves it as interrupted.
+        updateLastAssistant({
+          content: answer,
+          streaming: false,
+          token_usage: { status: "interrupted" },
+        });
+        return;
+      }
       updateLastAssistant({
         content: "Something went wrong generating this answer. Please try again.",
         streaming: false,
       });
       toast.error(err instanceof Error ? err.message : "Chat failed");
     } finally {
+      abortRef.current = null;
       setStreaming(false);
     }
   }
@@ -350,6 +378,7 @@ export default function ChatPage() {
         <ChatComposer
           onSend={handleSend}
           disabled={isStreaming}
+          onStop={isStreaming ? handleStop : undefined}
           onAttach={() => router.push("/documents")}
         />
       </div>

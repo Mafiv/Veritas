@@ -19,6 +19,7 @@ async function bootstrapVeritasUser(user: {
   email: string;
   name: string;
   image?: string | null;
+  emailVerified?: boolean;
 }) {
   if (!bootstrapSecret) {
     console.warn(
@@ -38,6 +39,8 @@ async function bootstrapVeritasUser(user: {
         email: user.email,
         full_name: user.name || user.email.split("@")[0],
         avatar_url: user.image || null,
+        // Backend links to a pre-existing Veritas account only when verified.
+        email_verified: user.emailVerified === true,
       }),
     });
     if (!res.ok) {
@@ -96,6 +99,7 @@ export const auth = betterAuth({
           email: user.email,
           name: user.name,
           image: user.image,
+          emailVerified: user.emailVerified,
         }),
       },
     }),

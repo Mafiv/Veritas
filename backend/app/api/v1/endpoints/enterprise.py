@@ -74,9 +74,7 @@ async def revoke_shared_link(
     user: CurrentUser,
     _access: RequireEditor,
 ) -> dict:
-    await enterprise_service.revoke_shared_link(
-        db, workspace_id=workspace_id, link_id=link_id
-    )
+    await enterprise_service.revoke_shared_link(db, workspace_id=workspace_id, link_id=link_id)
     return {"ok": True}
 
 
@@ -86,9 +84,7 @@ async def resolve_shared_link(
     db: DbSession,
     password: str | None = None,
 ) -> SharedLinkOut:
-    link = await enterprise_service.resolve_shared_link(
-        db, token=token, password=password
-    )
+    link = await enterprise_service.resolve_shared_link(db, token=token, password=password)
     return SharedLinkOut.model_validate(link)
 
 
@@ -139,7 +135,5 @@ async def delete_webhook(
     user: CurrentUser,
     _access: RequireOwner,
 ) -> dict:
-    await enterprise_service.delete_webhook(
-        db, workspace_id=workspace_id, endpoint_id=endpoint_id
-    )
+    await enterprise_service.delete_webhook(db, workspace_id=workspace_id, endpoint_id=endpoint_id)
     return {"ok": True}
