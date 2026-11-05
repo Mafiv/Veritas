@@ -298,6 +298,7 @@ class LLMClient:
                     citations.append(i)
             cite = "".join(f"[{i}]" for i in citations[:3]) or "[1]"
             question = user.split("Question:")[-1].strip() if "Question:" in user else user
+            question = question.split("\n\n")[0]  # drop trailing prompt instructions
             return (
                 f"Based on the provided source material{cite}, here is a grounded answer "
                 f"to your question.\n\n"
