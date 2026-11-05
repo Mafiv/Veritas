@@ -43,6 +43,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
     "ruff>=0.8.0",
+    "mypy>=1.13.0",
 ]
 
 [build-system]
@@ -55,6 +56,13 @@ packages = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+# Typed core: retrieval, LLM and ingestion paths are checked in CI.
+files = ["app/core", "app/services/retrieval", "app/services/llm", "app/services/ingestion"]
 
 [tool.ruff]
 line-length = 100

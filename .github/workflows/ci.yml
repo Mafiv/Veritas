@@ -4,12 +4,17 @@ name: CI
 
 on:
   push:
-    branches: [main, "cursor/**"]
+    branches: [main, "feat/**"]
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
+    name: Backend · lint, types, tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -19,12 +24,55 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
       - name: Install
         run: pip install -e ".[dev]"
-      - name: Test
+      - name: Ruff lint
+        run: ruff check app tests
+      - name: Ruff format
+        run: ruff format --check app tests
+      - name: Mypy (typed core)
+        run: mypy
+      - name: Unit tests
         run: pytest tests/unit -q
 
+  migrations:
+    name: Backend · migrations on Postgres + pgvector
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas
+          POSTGRES_DB: veritas
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://veritas:veritas@localhost:5432/veritas
+      DATABASE_URL_SYNC: postgresql://veritas:veritas@localhost:5432/veritas
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Apply migrations
+        run: alembic upgrade head
+      - name: Models match migrations (no drift)
+        run: alembic check
+
   frontend:
+    name: Frontend · lint, types, build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,6 +86,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
+      - name: ESLint
+        run: npx eslint .
+      - name: Type check
+        run: npx tsc --noEmit
       - name: Build
         run: npm run build
         env:
