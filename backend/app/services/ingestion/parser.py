@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 from app.models.domain import DocumentType
 

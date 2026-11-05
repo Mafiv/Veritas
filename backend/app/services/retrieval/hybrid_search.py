@@ -130,20 +130,14 @@ class HybridSearcher:
             query_embedding = await self.embedder.embed_query(query)
 
         # Vector ranking
-        vector_scores = [
-            cosine_similarity(query_embedding, c.embedding or []) for c in chunks
-        ]
-        vector_ranked = sorted(
-            range(len(chunks)), key=lambda i: vector_scores[i], reverse=True
-        )
+        vector_scores = [cosine_similarity(query_embedding, c.embedding or []) for c in chunks]
+        vector_ranked = sorted(range(len(chunks)), key=lambda i: vector_scores[i], reverse=True)
 
         # BM25 ranking
         bm25 = BM25Index()
         bm25.fit(corpus)
         bm25_scores = bm25.score(query)
-        bm25_ranked = sorted(
-            range(len(chunks)), key=lambda i: bm25_scores[i], reverse=True
-        )
+        bm25_ranked = sorted(range(len(chunks)), key=lambda i: bm25_scores[i], reverse=True)
 
         fused = reciprocal_rank_fusion(
             [vector_ranked, bm25_ranked],

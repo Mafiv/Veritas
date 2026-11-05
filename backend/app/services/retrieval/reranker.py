@@ -12,7 +12,9 @@ from app.services.retrieval.hybrid_search import ScoredChunk, tokenize
 class LexicalReranker:
     """Lightweight lexical cross-encoder stand-in (default / mock-friendly)."""
 
-    def rerank(self, query: str, candidates: list[ScoredChunk], top_k: int = 8) -> list[ScoredChunk]:
+    def rerank(
+        self, query: str, candidates: list[ScoredChunk], top_k: int = 8
+    ) -> list[ScoredChunk]:
         scored: list[ScoredChunk] = []
         for c in candidates:
             lexical = self._pair_score(query, c.chunk.content)
@@ -71,7 +73,9 @@ class CrossEncoderReranker:
         except Exception:
             return None
 
-    def rerank(self, query: str, candidates: list[ScoredChunk], top_k: int = 8) -> list[ScoredChunk]:
+    def rerank(
+        self, query: str, candidates: list[ScoredChunk], top_k: int = 8
+    ) -> list[ScoredChunk]:
         if self._model is None or not candidates:
             return self._lexical.rerank(query, candidates, top_k=top_k)
         pairs = [(query, c.chunk.content) for c in candidates]

@@ -174,9 +174,7 @@ class LLMClient:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 last_error = ""
                 for attempt in range(max_attempts):
-                    resp = await client.post(
-                        _GITHUB_MODELS_URL, headers=headers, json=body
-                    )
+                    resp = await client.post(_GITHUB_MODELS_URL, headers=headers, json=body)
                     if resp.status_code == 429:
                         retry_after = resp.headers.get("retry-after")
                         try:
@@ -194,11 +192,7 @@ class LLMClient:
                             f"GitHub Models HTTP {resp.status_code}: {resp.text[:400]}"
                         )
                     data = resp.json()
-                    content = (
-                        data.get("choices", [{}])[0]
-                        .get("message", {})
-                        .get("content")
-                    )
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content")
                     if not content:
                         raise LLMProviderError(
                             f"Empty response from GitHub Models model '{api_model}'"

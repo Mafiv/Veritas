@@ -47,9 +47,7 @@ class Embedder:
         if not texts:
             return []
         if self.settings.use_mock_llm or not self.settings.openai_api_key:
-            return [
-                _mock_embedding(t, self.settings.embedding_dimensions) for t in texts
-            ]
+            return [_mock_embedding(t, self.settings.embedding_dimensions) for t in texts]
         return await self._openai_embed(texts)
 
     async def embed_query(self, text: str) -> list[float]:

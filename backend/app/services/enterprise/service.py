@@ -83,9 +83,7 @@ async def resolve_shared_link(
     return link
 
 
-async def list_shared_links(
-    db: AsyncSession, workspace_id: UUID
-) -> list[SharedLink]:
+async def list_shared_links(db: AsyncSession, workspace_id: UUID) -> list[SharedLink]:
     return list(
         (
             await db.execute(
@@ -103,9 +101,7 @@ async def list_shared_links(
     )
 
 
-async def revoke_shared_link(
-    db: AsyncSession, *, workspace_id: UUID, link_id: UUID
-) -> None:
+async def revoke_shared_link(db: AsyncSession, *, workspace_id: UUID, link_id: UUID) -> None:
     link = await db.get(SharedLink, link_id)
     if not link or link.workspace_id != workspace_id:
         raise NotFoundError("Shared link not found")
@@ -152,9 +148,7 @@ async def list_webhooks(db: AsyncSession, workspace_id: UUID) -> list[WebhookEnd
     )
 
 
-async def delete_webhook(
-    db: AsyncSession, *, workspace_id: UUID, endpoint_id: UUID
-) -> None:
+async def delete_webhook(db: AsyncSession, *, workspace_id: UUID, endpoint_id: UUID) -> None:
     ep = await db.get(WebhookEndpoint, endpoint_id)
     if not ep or ep.workspace_id != workspace_id:
         raise NotFoundError("Webhook not found")

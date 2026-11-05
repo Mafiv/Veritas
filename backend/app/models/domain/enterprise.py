@@ -62,9 +62,7 @@ class WebhookDelivery(Base, TimestampMixin):
     """Delivery attempts for webhook endpoints (retry / debug)."""
 
     __tablename__ = "webhook_deliveries"
-    __table_args__ = (
-        Index("ix_webhook_deliveries_endpoint_created", "endpoint_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_webhook_deliveries_endpoint_created", "endpoint_id", "created_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     endpoint_id: Mapped[uuid.UUID] = mapped_column(
@@ -80,7 +78,9 @@ class WebhookDelivery(Base, TimestampMixin):
     http_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_retry_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     endpoint: Mapped[WebhookEndpoint] = relationship(back_populates="deliveries")

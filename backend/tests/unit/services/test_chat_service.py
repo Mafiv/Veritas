@@ -27,9 +27,7 @@ async def test_persist_citations():
             citation_index=1,
         )
     ]
-    rows = await chat_service.persist_citations(
-        db, message_id=uuid4(), citations=citations
-    )
+    rows = await chat_service.persist_citations(db, message_id=uuid4(), citations=citations)
     assert len(rows) == 1
     assert rows[0].snippet == "hello"
     db.add.assert_called()

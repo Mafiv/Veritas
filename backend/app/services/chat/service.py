@@ -7,7 +7,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
 from app.models.domain import (
     ChatThreadDocument,
     FeedbackVote,
@@ -105,9 +104,7 @@ async def add_thread_comment(
     return row
 
 
-async def list_thread_comments(
-    db: AsyncSession, thread_id: UUID
-) -> list[ThreadComment]:
+async def list_thread_comments(db: AsyncSession, thread_id: UUID) -> list[ThreadComment]:
     result = await db.execute(
         select(ThreadComment)
         .where(ThreadComment.thread_id == thread_id)
@@ -123,10 +120,14 @@ async def set_thread_documents(
     document_ids: list[UUID],
 ) -> list[ChatThreadDocument]:
     existing = (
-        await db.execute(
-            select(ChatThreadDocument).where(ChatThreadDocument.thread_id == thread_id)
+        (
+            await db.execute(
+                select(ChatThreadDocument).where(ChatThreadDocument.thread_id == thread_id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for row in existing:
         await db.delete(row)
     await db.flush()
@@ -141,9 +142,7 @@ async def set_thread_documents(
 
 async def get_thread_document_ids(db: AsyncSession, thread_id: UUID) -> list[UUID]:
     result = await db.execute(
-        select(ChatThreadDocument.document_id).where(
-            ChatThreadDocument.thread_id == thread_id
-        )
+        select(ChatThreadDocument.document_id).where(ChatThreadDocument.thread_id == thread_id)
     )
     return list(result.scalars().all())
 

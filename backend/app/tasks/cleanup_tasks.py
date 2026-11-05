@@ -36,13 +36,7 @@ async def _cleanup() -> dict:
         return {"removed": 0, "path": str(root)}
 
     async with AsyncSessionLocal() as session:
-        paths = set(
-            (
-                await session.execute(select(Document.storage_path))
-            )
-            .scalars()
-            .all()
-        )
+        paths = set((await session.execute(select(Document.storage_path))).scalars().all())
 
     removed = 0
     scanned = 0

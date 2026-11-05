@@ -65,11 +65,13 @@ async def create_key(
 
 async def list_keys(db: AsyncSession, workspace_id: UUID) -> list[ApiKey]:
     result = await db.execute(
-        select(ApiKey).where(
+        select(ApiKey)
+        .where(
             ApiKey.workspace_id == workspace_id,
             ApiKey.deleted_at.is_(None),
             ApiKey.revoked_at.is_(None),
-        ).order_by(ApiKey.created_at.desc())
+        )
+        .order_by(ApiKey.created_at.desc())
     )
     return list(result.scalars().all())
 

@@ -32,7 +32,13 @@ export_job_type = postgresql.ENUM(
     create_type=False,
 )
 export_job_status = postgresql.ENUM(
-    "queued", "processing", "ready", "failed", "expired", name="export_job_status", create_type=False
+    "queued",
+    "processing",
+    "ready",
+    "failed",
+    "expired",
+    name="export_job_status",
+    create_type=False,
 )
 shared_link_resource_type = postgresql.ENUM(
     "thread", "document", "collection", name="shared_link_resource_type", create_type=False
@@ -57,11 +63,26 @@ def upgrade() -> None:
         sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("url", sa.String(1000), nullable=False),
         sa.Column("secret_hash", sa.String(128), nullable=False),
-        sa.Column("event_types", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")),
+        sa.Column(
+            "event_types",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'[]'::jsonb"),
+        ),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("description", sa.String(300), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="RESTRICT"),
@@ -82,13 +103,25 @@ def upgrade() -> None:
         sa.Column("attempt_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("next_retry_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["endpoint_id"], ["webhook_endpoints.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_webhook_deliveries_endpoint_id", "webhook_deliveries", ["endpoint_id"])
     op.create_index(
-        "ix_webhook_deliveries_endpoint_created", "webhook_deliveries", ["endpoint_id", "created_at"]
+        "ix_webhook_deliveries_endpoint_created",
+        "webhook_deliveries",
+        ["endpoint_id", "created_at"],
     )
 
     op.create_table(
@@ -100,12 +133,27 @@ def upgrade() -> None:
         sa.Column("client_id", sa.String(300), nullable=True),
         sa.Column("client_secret_encrypted", sa.Text(), nullable=True),
         sa.Column("metadata_xml", sa.Text(), nullable=True),
-        sa.Column("domains", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")),
+        sa.Column(
+            "domains",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'[]'::jsonb"),
+        ),
         sa.Column("is_enforced", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("workspace_id", "provider", name="uq_sso_workspace_provider"),
@@ -122,12 +170,26 @@ def upgrade() -> None:
         sa.Column("hard_delete", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("workspace_id", "resource_type", name="uq_retention_workspace_resource"),
+        sa.UniqueConstraint(
+            "workspace_id", "resource_type", name="uq_retention_workspace_resource"
+        ),
     )
-    op.create_index("ix_data_retention_policies_workspace_id", "data_retention_policies", ["workspace_id"])
+    op.create_index(
+        "ix_data_retention_policies_workspace_id", "data_retention_policies", ["workspace_id"]
+    )
 
     op.create_table(
         "export_jobs",
@@ -143,8 +205,18 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="SET NULL"),
     )
@@ -167,8 +239,18 @@ def upgrade() -> None:
         sa.Column("view_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("allow_download", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="RESTRICT"),

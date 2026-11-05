@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.domain import PlanTier
 from app.services.billing import service as billing_service
 
 
