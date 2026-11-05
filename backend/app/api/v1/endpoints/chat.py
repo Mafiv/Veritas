@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession, RequireEditor, RequireViewer
 from app.core.exceptions import NotFoundError
@@ -39,8 +42,10 @@ from app.services.billing import service as billing_service
 from app.services.chat import service as chat_service
 from app.services.documents import service as doc_service
 from app.services.llm.orchestrator import RAGOrchestrator
+from app.services.monitoring.logger import get_logger
 
 router = APIRouter(tags=["chat"])
+log = get_logger("veritas.chat")
 rag = RAGOrchestrator()
 
 
@@ -264,7 +269,12 @@ async def chat_query(
         content=result.answer,
         citations=[c.model_dump(mode="json") for c in result.citations],
         latency_ms=result.latency_ms,
-        token_usage={"retrieved": result.retrieved_count},
+        token_usage={
+            "retrieved": result.retrieved_count,
+            "status": "complete",
+            "abstained": result.abstained,
+            "trace": result.trace.as_dict(),
+        },
     )
     db.add(assistant)
     await db.flush()
@@ -333,75 +343,70 @@ async def chat_stream(
     thread_id = thread.id
     user_id = user.id
 
-    async def event_generator():
+    async def event_generator() -> AsyncIterator[str]:
         from app.db.session import AsyncSessionLocal
 
-        full_answer = ""
+        answer = ""
         citations_payload: list = []
-        latency_ms = 0.0
-        retrieved = 0
+        done: dict = {}
+        status = "complete"
 
         yield _sse("thread", {"thread_id": str(thread_id)})
 
         async with AsyncSessionLocal() as session:
-            async for event in rag.stream_answer(
-                session,
-                workspace_id=workspace_id,
-                question=body.question,
-                document_ids=doc_ids,
-                history=history,
-                use_hyde=body.use_hyde,
-                use_rerank=body.use_rerank,
-            ):
-                if event["event"] == "citations":
-                    citations_payload = event["data"]["citations"]
-                elif event["event"] == "token":
-                    full_answer += event["data"]["token"]
-                elif event["event"] == "done":
-                    full_answer = event["data"]["answer"]
-                    citations_payload = event["data"]["citations"]
-                    latency_ms = event["data"]["latency_ms"]
-                    retrieved = event["data"]["retrieved_count"]
-                yield _sse(event["event"], event["data"])
-
-            assistant = ChatMessage(
-                thread_id=thread_id,
-                role=MessageRole.ASSISTANT,
-                content=full_answer,
-                citations=citations_payload,
-                latency_ms=latency_ms,
-                token_usage={"retrieved": retrieved},
-            )
-            session.add(assistant)
-            await session.flush()
-            await chat_service.persist_citations(
-                session, message_id=assistant.id, citations=citations_payload
-            )
-
-            u = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-            u.queries_today = (u.queries_today or 0) + 1
-            await billing_service.record_usage(
-                session,
-                user_id=user_id,
-                workspace_id=workspace_id,
-                event_type="query",
-                quantity=1,
-                meta={"latency_ms": latency_ms, "stream": True},
-                meter_key="query",
-            )
-            t = (
-                await session.execute(select(ChatThread).where(ChatThread.id == thread_id))
-            ).scalar_one()
-            if t.title == "New conversation":
-                t.title = body.question[:80]
-            await session.commit()
-            yield _sse(
-                "message",
-                {
-                    "message_id": str(assistant.id),
-                    "thread_id": str(thread_id),
-                },
-            )
+            try:
+                async for event in rag.stream_answer(
+                    session,
+                    workspace_id=workspace_id,
+                    question=body.question,
+                    document_ids=doc_ids,
+                    history=history,
+                    use_hyde=body.use_hyde,
+                    use_rerank=body.use_rerank,
+                ):
+                    if event["event"] == "token":
+                        answer += event["data"]["token"]
+                    elif event["event"] == "done":
+                        done = event["data"]
+                        answer = done["answer"]
+                        citations_payload = done["citations"]
+                    yield _sse(event["event"], event["data"])
+            except (asyncio.CancelledError, GeneratorExit):
+                # Client disconnected / stream closed: keep what was generated, then
+                # stop. Yielding is not allowed from here on.
+                status = "interrupted"
+                raise
+            except Exception as exc:  # noqa: BLE001 - surface to the client, never hang
+                status = "error"
+                log.error("chat.stream_failed", thread_id=str(thread_id), error=str(exc))
+                await session.rollback()
+                yield _sse(
+                    "error",
+                    {
+                        "message": "The answer could not be completed. Please try again.",
+                        "partial": bool(answer),
+                    },
+                )
+            finally:
+                if answer or status == "complete":
+                    message_id = await asyncio.shield(
+                        _persist_stream_result(
+                            session,
+                            thread_id=thread_id,
+                            user_id=user_id,
+                            workspace_id=workspace_id,
+                            question=body.question,
+                            answer=answer,
+                            citations=citations_payload,
+                            done=done,
+                            status=status,
+                        )
+                    )
+                    if status != "interrupted":
+                        yield _sse(
+                            "message",
+                            {"message_id": str(message_id), "thread_id": str(thread_id)},
+                        )
 
     return StreamingResponse(
         event_generator(),
@@ -517,6 +522,55 @@ async def _load_history(db: DbSession, thread_id: UUID) -> list[tuple[str, str]]
     )
     messages = list(reversed(result.scalars().all()))
     return [(m.role.value if hasattr(m.role, "value") else m.role, m.content) for m in messages]
+
+
+async def _persist_stream_result(
+    session: AsyncSession,
+    *,
+    thread_id: UUID,
+    user_id: UUID,
+    workspace_id: UUID,
+    question: str,
+    answer: str,
+    citations: list,
+    done: dict,
+    status: str,
+) -> UUID:
+    """Save the assistant turn (complete or partial) and meter completed queries."""
+    assistant = ChatMessage(
+        thread_id=thread_id,
+        role=MessageRole.ASSISTANT,
+        content=answer,
+        citations=citations,
+        latency_ms=done.get("latency_ms"),
+        token_usage={
+            "retrieved": done.get("retrieved_count", 0),
+            "status": status,
+            "abstained": done.get("abstained", False),
+            "trace": done.get("trace"),
+        },
+    )
+    session.add(assistant)
+    await session.flush()
+    await chat_service.persist_citations(session, message_id=assistant.id, citations=citations)
+
+    if status == "complete":
+        u = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
+        u.queries_today = (u.queries_today or 0) + 1
+        await billing_service.record_usage(
+            session,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            event_type="query",
+            quantity=1,
+            meta={"latency_ms": done.get("latency_ms"), "stream": True},
+            meter_key="query",
+        )
+    t = (await session.execute(select(ChatThread).where(ChatThread.id == thread_id))).scalar_one()
+    if t.title == "New conversation":
+        t.title = question[:80]
+    await session.commit()
+    return assistant.id
 
 
 def _sse(event: str, data: dict) -> str:
