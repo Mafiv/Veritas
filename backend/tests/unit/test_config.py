@@ -39,6 +39,8 @@ def test_insecure_production_config_is_rejected(override: dict, message: str) ->
         _settings(**override)
 
 
-def test_development_allows_defaults() -> None:
+def test_development_allows_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    # litellm loads backend/.env into os.environ on import; keep this hermetic.
+    monkeypatch.delenv("SECRET_KEY", raising=False)
     s = Settings(_env_file=None, app_env="development")  # type: ignore[call-arg]
     assert s.secret_key == DEFAULT_SECRET_KEY
