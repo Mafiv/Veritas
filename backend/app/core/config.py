@@ -51,8 +51,12 @@ class Settings(BaseSettings):
     github_api_key: str = ""
     anthropic_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    # Embeddings: "local" (fastembed/ONNX, no key), "openai", or "mock" (tests only).
+    # embedding_dimensions must match the vector(N) column created by migration 011.
+    embedding_provider: Literal["local", "openai", "mock"] = "local"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dimensions: int = 384
+    model_cache_dir: str = ""  # fastembed model cache; empty = library default
     chat_model: str = "gpt-4o-mini"
     chat_fallback_model: str = "gpt-3.5-turbo"
     use_mock_llm: bool = True  # deterministic local mode without API keys
@@ -61,6 +65,10 @@ class Settings(BaseSettings):
     hybrid_vector_weight: float = 0.6
     hybrid_bm25_weight: float = 0.4
     retrieval_top_k: int = 20
+    # Candidates pulled from each index (vector, keyword) before fusion.
+    retrieval_candidates: int = 50
+    # HNSW search breadth; higher = better recall, slower.
+    hnsw_ef_search: int = 80
     rerank_top_k: int = 8
     enable_hyde: bool = True
     enable_query_expansion: bool = True
@@ -95,8 +103,7 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@veritas.local"
     smtp_use_tls: bool = True
 
-    # Retrieval productionization
-    use_pgvector: bool = False
+    # Reranking
     reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 

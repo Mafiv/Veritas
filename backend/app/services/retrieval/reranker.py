@@ -25,7 +25,7 @@ class LexicalReranker:
                     document=c.document,
                     score=new_score,
                     vector_score=c.vector_score,
-                    bm25_score=c.bm25_score,
+                    keyword_score=c.keyword_score,
                 )
             )
         scored.sort(key=lambda x: x.score, reverse=True)
@@ -91,7 +91,7 @@ class CrossEncoderReranker:
                     document=c.document,
                     score=float(s),
                     vector_score=c.vector_score,
-                    bm25_score=c.bm25_score,
+                    keyword_score=c.keyword_score,
                 )
             )
         scored.sort(key=lambda x: x.score, reverse=True)

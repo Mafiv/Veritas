@@ -50,11 +50,24 @@ class IngestionService:
             await f.write(data)
         return str(path)
 
-    async def _default_embedding_model(self, db: AsyncSession) -> EmbeddingModel | None:
-        result = await db.execute(
-            select(EmbeddingModel).where(EmbeddingModel.is_default.is_(True)).limit(1)
-        )
-        return result.scalar_one_or_none()
+    async def _active_embedding_model(self, db: AsyncSession) -> EmbeddingModel:
+        """Registry row for the model that actually produced these vectors."""
+        model_id = self.settings.embedding_model
+        row = (
+            await db.execute(select(EmbeddingModel).where(EmbeddingModel.model_id == model_id))
+        ).scalar_one_or_none()
+        if row is None:
+            row = EmbeddingModel(
+                name=model_id.split("/")[-1][:120],
+                provider=self.settings.embedding_provider,
+                model_id=model_id,
+                dimensions=self.settings.embedding_dimensions,
+                is_default=False,
+                is_active=True,
+            )
+            db.add(row)
+            await db.flush()
+        return row
 
     async def process_document(
         self,
@@ -101,7 +114,7 @@ class IngestionService:
 
             await job_service.mark_stage(db, job, IngestionJobStage.EMBED)
             embeddings = await self.embedder.embed_texts([c.content for c in chunks])
-            emb_model = await self._default_embedding_model(db)
+            emb_model = await self._active_embedding_model(db)
 
             existing = await db.execute(
                 select(DocumentChunk).where(DocumentChunk.document_id == doc.id)
@@ -122,7 +135,7 @@ class IngestionService:
                         page_number=chunk.page_number,
                         heading=chunk.heading,
                         embedding=emb,
-                        embedding_model_id=emb_model.id if emb_model else None,
+                        embedding_model_id=emb_model.id,
                         meta=chunk.meta,
                     )
                 )
