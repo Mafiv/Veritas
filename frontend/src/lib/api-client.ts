@@ -314,20 +314,6 @@ async function request<T>(
 }
 
 export const api = {
-  /** @deprecated Prefer Better Auth signUp/signIn — kept for scripts/tests */
-  register: (body: { email: string; password: string; full_name: string }) =>
-    request<{ access_token: string; refresh_token: string }>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  /** @deprecated Prefer Better Auth signIn — kept for scripts/tests */
-  login: (body: { email: string; password: string }) =>
-    request<{ access_token: string; refresh_token: string }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
   me: () => request<User>("/auth/me"),
 
   /** Ensure Veritas user exists after Better Auth signup/login */

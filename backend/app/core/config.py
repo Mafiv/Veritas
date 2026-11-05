@@ -22,9 +22,6 @@ class Settings(BaseSettings):
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
     secret_key: str = Field(default=DEFAULT_SECRET_KEY)
-    access_token_expire_minutes: int = 60 * 24
-    refresh_token_expire_days: int = 30
-    algorithm: str = "HS256"
 
     # Database
     database_url: str = "postgresql+asyncpg://veritas:veritas@localhost:5432/veritas"
@@ -93,7 +90,13 @@ class Settings(BaseSettings):
     ingest_inline: bool = True
     max_upload_mb: int = 25
 
-    # Rate limits / free tier
+    # Per-minute request limits (Redis, shared across workers). 0 disables one.
+    rate_limit_enabled: bool = True
+    rate_limit_chat_per_minute: int = 30
+    rate_limit_upload_per_minute: int = 20
+    rate_limit_auth_sync_per_minute: int = 20
+
+    # Plan quotas / free tier
     free_tier_queries_per_day: int = 20
     free_tier_documents: int = 5
     free_tier_workspaces: int = 1

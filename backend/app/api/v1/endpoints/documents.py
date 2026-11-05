@@ -18,6 +18,7 @@ from app.api.deps import (
     RequireViewer,
     check_document_quota,
 )
+from app.api.rate_limit import limit_per_user
 from app.core.exceptions import NotFoundError
 from app.models.domain import Document, DocumentStatus
 from app.models.schemas import DocumentListResponse, DocumentOut
@@ -67,7 +68,12 @@ async def list_documents(
     return DocumentListResponse(items=items, total=len(items))
 
 
-@router.post("/workspaces/{workspace_id}/documents", response_model=DocumentOut, status_code=202)
+@router.post(
+    "/workspaces/{workspace_id}/documents",
+    response_model=DocumentOut,
+    status_code=202,
+    dependencies=[limit_per_user("upload", "rate_limit_upload_per_minute")],
+)
 async def upload_document(
     workspace_id: UUID,
     db: DbSession,

@@ -8,16 +8,16 @@ from uuid import UUID
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.better_auth import verify_better_auth_jwt
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError, QuotaExceededError, UnauthorizedError
-from app.core.security import safe_decode_token
 from app.db.session import get_db
 from app.models.domain import User, Workspace, WorkspaceMember, WorkspaceRole
 from app.services.identity.api_keys import validate_key
+from app.services.identity.linking import email_verified_from_claims, find_linked_user
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -30,27 +30,16 @@ API_KEY_WORKSPACE_ATTR = "api_key_workspace_id"
 
 async def _resolve_user_from_better_auth(db: AsyncSession, claims: dict) -> User:
     auth_user_id = str(claims.get("sub") or claims.get("id") or "")
-    email = (claims.get("email") or "").lower()
-    if not auth_user_id and not email:
-        raise UnauthorizedError("Token missing subject")
-
-    conditions = []
-    if auth_user_id:
-        conditions.append(User.auth_user_id == auth_user_id)
-    if email:
-        conditions.append(User.email == email)
-    result = await db.execute(select(User).where(or_(*conditions)))
-    user = result.scalar_one_or_none()
-    if not user:
+    user = await find_linked_user(
+        db,
+        auth_user_id=auth_user_id,
+        email=str(claims.get("email") or ""),
+        email_verified=email_verified_from_claims(claims),
+    )
+    if user is None:
         raise UnauthorizedError(
             "Veritas user not provisioned — complete signup again or contact support"
         )
-
-    # Backfill auth_user_id on first successful login after migration
-    if auth_user_id and not user.auth_user_id:
-        user.auth_user_id = auth_user_id
-        await db.flush()
-
     if not user.is_active or user.deleted_at is not None:
         raise UnauthorizedError("User not found or inactive")
     return user
@@ -73,22 +62,10 @@ async def get_current_user(
         setattr(request.state, "api_key_scopes", validated.api_key.scopes)
         return validated.user
 
-    # Prefer Better Auth JWT (EdDSA / JWKS). Fall back to legacy HS256 access tokens.
-    try:
-        claims = verify_better_auth_jwt(token)
-        return await _resolve_user_from_better_auth(db, claims)
-    except UnauthorizedError:
-        payload = safe_decode_token(token)
-        if not payload or payload.get("type") != "access":
-            raise UnauthorizedError("Invalid or expired token")
-        user_id = payload.get("sub")
-        result = await db.execute(select(User).where(User.id == UUID(user_id)))
-        user = result.scalar_one_or_none()
-        if not user or not user.is_active:
-            raise UnauthorizedError("User not found or inactive")
-        if user.deleted_at is not None:
-            raise UnauthorizedError("User not found or inactive")
-        return user
+    # Only Better Auth JWTs (asymmetric, verified via JWKS) are accepted. The
+    # legacy HS256 tokens signed with SECRET_KEY are no longer honoured.
+    claims = verify_better_auth_jwt(token)
+    return await _resolve_user_from_better_auth(db, claims)
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
