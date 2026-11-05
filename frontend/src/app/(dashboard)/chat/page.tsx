@@ -80,22 +80,23 @@ export default function ChatPage() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  const workspaceId = workspace?.id;
+
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspaceId) return;
     let cancelled = false;
     (async () => {
-      setLoading(true);
-      setError(null);
       try {
         const [t, d, u] = await Promise.all([
-          api.listThreads(workspace.id),
-          api.listDocuments(workspace.id),
+          api.listThreads(workspaceId),
+          api.listDocuments(workspaceId),
           api.usage().catch(() => null),
         ]);
         if (cancelled) return;
         setThreads(t);
         setDocs(d.items);
         setUsage(u);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load chat");
       } finally {
@@ -105,14 +106,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspace?.id]);
-
-  // Auto-open sources when citations arrive; keep collapsed preference otherwise
-  useEffect(() => {
-    if (citations.length > 0) {
-      setSourcesCollapsed(false);
-    }
-  }, [citations.length]);
+  }, [workspaceId]);
 
   const readyDocs = useMemo(
     () => docs.filter((d) => d.status === "ready"),
@@ -152,6 +146,7 @@ export default function ChatPage() {
       const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant");
       if (lastAssistant?.citations?.length) {
         setCitations(lastAssistant.citations);
+        setSourcesCollapsed(false);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load thread");

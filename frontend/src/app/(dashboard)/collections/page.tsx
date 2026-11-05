@@ -20,7 +20,7 @@ export default function CollectionsPage() {
 
   const load = useCallback(async () => {
     if (!workspace) return;
-    setLoading(true);
+    // Runs from an effect on mount; initial `loading` state is already true.
     try {
       const [cols, d] = await Promise.all([
         api.listCollections(workspace.id),
@@ -36,7 +36,9 @@ export default function CollectionsPage() {
   }, [workspace]);
 
   useEffect(() => {
-    load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   async function create() {
