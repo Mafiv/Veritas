@@ -110,6 +110,13 @@ Each of these came from a measurement or a failing test, not a guess.
   insert failed on a freshly migrated database. Dev databases built with
   `create_all` had hidden it. `create_all` is gone, and CI now runs
   `alembic check` for drift.
+- **Running the whole stack found two more.** Two uploads ingested at the same
+  time raced on a per-workspace unique key. The failed document then stayed
+  `pending` forever, because the broken session couldn't record the failure.
+  Entities are now upserted in a fixed order, processing runs in a savepoint,
+  and both cases have tests that fail on the old code. The same run showed the
+  worker forking one process per CPU, each loading the model, until it was
+  killed for running out of memory, so concurrency now defaults to 2.
 
 ## Security
 
@@ -222,7 +229,7 @@ python -m evaluation.run                           # full retrieval comparison
 python -m evaluation.bench_scale                   # latency vs workspace size
 ```
 
-There are 153 backend tests. The integration tests cover search ranking and
+There are 155 backend tests. The integration tests cover search ranking and
 scoping, upload → ingest → cited answer over HTTP, the SSE event sequence,
 upload rejection, account linking, and the tenant-isolation sweep. CI runs
 lint (ruff), types (mypy on the core packages), unit tests, migrations and
