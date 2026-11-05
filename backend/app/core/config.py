@@ -3,8 +3,10 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_SECRET_KEY = "change-me-in-production-veritas-secret-key-32chars"
 
 
 class Settings(BaseSettings):
@@ -19,7 +21,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "staging", "production"] = "development"
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
-    secret_key: str = Field(default="change-me-in-production-veritas-secret-key-32chars")
+    secret_key: str = Field(default=DEFAULT_SECRET_KEY)
     access_token_expire_minutes: int = 60 * 24
     refresh_token_expire_days: int = 30
     algorithm: str = "HS256"
@@ -97,6 +99,24 @@ class Settings(BaseSettings):
     use_pgvector: bool = False
     reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    @model_validator(mode="after")
+    def _refuse_insecure_production(self) -> "Settings":
+        """Fail fast instead of booting production with dev secrets."""
+        if self.app_env != "production":
+            return self
+        problems: list[str] = []
+        if self.secret_key == DEFAULT_SECRET_KEY or len(self.secret_key) < 32:
+            problems.append("SECRET_KEY must be set to a random value of at least 32 chars")
+        if len(self.internal_auth_bootstrap_secret) < 16:
+            problems.append("INTERNAL_AUTH_BOOTSTRAP_SECRET must be at least 16 chars")
+        if self.debug:
+            problems.append("DEBUG must be false")
+        if self.use_mock_llm:
+            problems.append("USE_MOCK_LLM must be false")
+        if problems:
+            raise ValueError("Insecure production configuration: " + "; ".join(problems))
+        return self
 
 
 @lru_cache
