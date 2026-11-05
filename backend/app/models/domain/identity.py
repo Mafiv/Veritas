@@ -20,6 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.domain.base import (
+    enum_values,
     Base,
     InvitationStatus,
     JSONType,
@@ -51,7 +52,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Legacy billing fields — source of truth moves to subscriptions/usage_meters.
     # Kept additive for backward compatibility until a breaking cleanup migration.
-    plan: Mapped[PlanTier] = mapped_column(Enum(PlanTier, name="plan_tier"), default=PlanTier.FREE)
+    plan: Mapped[PlanTier] = mapped_column(
+        Enum(PlanTier, values_callable=enum_values, name="plan_tier"), default=PlanTier.FREE
+    )
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     queries_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -105,7 +108,9 @@ class WorkspaceMember(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[WorkspaceRole] = mapped_column(
-        Enum(WorkspaceRole, name="workspace_role"), default=WorkspaceRole.VIEWER, nullable=False
+        Enum(WorkspaceRole, values_callable=enum_values, name="workspace_role"),
+        default=WorkspaceRole.VIEWER,
+        nullable=False,
     )
 
     workspace: Mapped[Workspace] = relationship(back_populates="members")
@@ -127,7 +132,12 @@ class Invitation(Base, TimestampMixin, SoftDeleteMixin):
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     role: Mapped[WorkspaceRole] = mapped_column(
-        Enum(WorkspaceRole, name="workspace_role", create_constraint=False),
+        Enum(
+            WorkspaceRole,
+            values_callable=enum_values,
+            name="workspace_role",
+            create_constraint=False,
+        ),
         default=WorkspaceRole.VIEWER,
         nullable=False,
     )
@@ -136,7 +146,7 @@ class Invitation(Base, TimestampMixin, SoftDeleteMixin):
     )
     token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     status: Mapped[InvitationStatus] = mapped_column(
-        Enum(InvitationStatus, name="invitation_status"),
+        Enum(InvitationStatus, values_callable=enum_values, name="invitation_status"),
         default=InvitationStatus.PENDING,
         nullable=False,
     )
