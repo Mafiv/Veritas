@@ -15,7 +15,7 @@ from app.services.ingestion.embedder import Embedder
 from app.services.llm.client import LLMClient
 from app.services.retrieval.hybrid_search import HybridSearcher, ScoredChunk
 from app.services.retrieval.query_rewriter import QueryRewriter
-from app.services.retrieval.reranker import CrossEncoderReranker
+from app.services.retrieval.reranker import build_reranker
 
 SYSTEM_PROMPT = """You are Veritas, a precise research assistant.
 Answer ONLY using the provided source excerpts.
@@ -38,7 +38,7 @@ class RAGOrchestrator:
         self.embedder = Embedder()
         self.searcher = HybridSearcher(self.embedder)
         self.rewriter = QueryRewriter(embedder=self.embedder)
-        self.reranker = CrossEncoderReranker()
+        self.reranker = build_reranker()
         self.llm = LLMClient()
 
     async def retrieve(
@@ -81,7 +81,7 @@ class RAGOrchestrator:
         candidates = candidates[: self.settings.retrieval_top_k]
 
         if use_rerank and self.settings.enable_reranker and candidates:
-            candidates = self.reranker.rerank(
+            candidates = await self.reranker.rerank(
                 question, candidates, top_k=self.settings.rerank_top_k
             )
         else:

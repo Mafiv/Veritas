@@ -104,8 +104,8 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
 
     # Reranking
-    reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_backend: Literal["lexical", "cross_encoder"] = "cross_encoder"
+    reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
 
     @model_validator(mode="after")
     def _refuse_insecure_production(self) -> "Settings":
