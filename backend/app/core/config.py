@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     stripe_price_team: str = ""
     frontend_url: str = "http://localhost:3000"
 
+    # Ingestion: run in the API process (dev, no worker) or queue on Celery.
+    ingest_inline: bool = True
+    max_upload_mb: int = 25
+
     # Rate limits / free tier
     free_tier_queries_per_day: int = 20
     free_tier_documents: int = 5

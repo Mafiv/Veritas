@@ -36,6 +36,12 @@ from app.services.documents import service as doc_service
 from app.services.ingestion import jobs as job_service
 from app.services.ingestion.parser import detect_doc_type
 from app.services.ingestion.pipeline import IngestionService
+from app.services.ingestion.upload import (
+    dispatch_ingestion,
+    read_limited,
+    sanitize_filename,
+    validate_content,
+)
 
 router = APIRouter(tags=["documents"])
 ingestion = IngestionService()
@@ -61,7 +67,7 @@ async def list_documents(
     return DocumentListResponse(items=items, total=len(items))
 
 
-@router.post("/workspaces/{workspace_id}/documents", response_model=DocumentOut)
+@router.post("/workspaces/{workspace_id}/documents", response_model=DocumentOut, status_code=202)
 async def upload_document(
     workspace_id: UUID,
     db: DbSession,
@@ -71,10 +77,11 @@ async def upload_document(
 ) -> Document:
     await check_document_quota(user, db)
 
-    data = await file.read()
-    filename = file.filename or "upload.txt"
+    data = await read_limited(file)
+    filename = sanitize_filename(file.filename)
     content_type = file.content_type or "application/octet-stream"
     doc_type = detect_doc_type(filename, content_type)
+    validate_content(doc_type, data)
 
     existing = await db.execute(
         select(Document)
@@ -110,11 +117,6 @@ async def upload_document(
         document_id=doc.id,
     )
 
-    try:
-        await ingestion.process_document(db, doc.id, job_id=job.id)
-    except Exception:
-        pass
-
     await write_audit(
         db,
         action="document.upload",
@@ -124,6 +126,7 @@ async def upload_document(
         workspace_id=workspace_id,
         details={"filename": filename, "version": version, "job_id": str(job.id)},
     )
+    await dispatch_ingestion(db, doc, job)
     await db.refresh(doc)
     return doc
 
@@ -392,6 +395,7 @@ async def delete_document(
 @router.post(
     "/workspaces/{workspace_id}/documents/{document_id}/reprocess",
     response_model=DocumentOut,
+    status_code=202,
 )
 async def reprocess_document(
     workspace_id: UUID,
@@ -417,7 +421,7 @@ async def reprocess_document(
         document_id=doc.id,
         document_version_id=doc.active_version_id,
     )
-    await ingestion.process_document(db, doc.id, job_id=job.id)
+    await dispatch_ingestion(db, doc, job)
     await db.refresh(doc)
     return doc
 
