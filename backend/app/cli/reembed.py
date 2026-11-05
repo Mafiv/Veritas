@@ -14,7 +14,8 @@ import time
 from sqlalchemy import or_, select
 
 from app.db.session import AsyncSessionLocal
-from app.models.domain import DocumentChunk
+from app.models.domain import Document, DocumentChunk
+from app.services.ingestion.chunker import contextualize
 from app.services.ingestion.embedder import Embedder
 from app.services.ingestion.pipeline import IngestionService
 
@@ -28,7 +29,12 @@ async def reembed(batch_size: int, include_all: bool) -> int:
         await db.commit()
         last_id = None
         while True:
-            stmt = select(DocumentChunk).order_by(DocumentChunk.id).limit(batch_size)
+            stmt = (
+                select(DocumentChunk, Document.original_filename)
+                .join(Document, Document.id == DocumentChunk.document_id)
+                .order_by(DocumentChunk.id)
+                .limit(batch_size)
+            )
             if not include_all:
                 stmt = stmt.where(
                     or_(
@@ -38,10 +44,13 @@ async def reembed(batch_size: int, include_all: bool) -> int:
                 )
             if last_id is not None:
                 stmt = stmt.where(DocumentChunk.id > last_id)
-            chunks = list((await db.execute(stmt)).scalars().all())
-            if not chunks:
+            rows = (await db.execute(stmt)).all()
+            if not rows:
                 break
-            vectors = await embedder.embed_texts([c.content for c in chunks])
+            chunks = [chunk for chunk, _ in rows]
+            vectors = await embedder.embed_texts(
+                [contextualize(title, chunk.heading, chunk.content) for chunk, title in rows]
+            )
             for chunk, vec in zip(chunks, vectors):
                 chunk.embedding = vec
                 chunk.embedding_model_id = model.id

@@ -16,6 +16,7 @@ _PROVIDER_API_KEYS: dict[str, str] = {
     "gemini": "gemini_api_key",
     "github": "github_api_key",
     "anthropic": "anthropic_api_key",
+    "deepseek": "deepseek_api_key",
 }
 
 # GitHub Models OpenAI-compatible endpoint (LiteLLM mishandles gpt-5 max tokens).

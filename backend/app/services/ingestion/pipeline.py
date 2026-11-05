@@ -26,7 +26,7 @@ from app.models.domain import (
     IngestionJobStage,
     SuggestedQuestion,
 )
-from app.services.ingestion.chunker import chunk_document
+from app.services.ingestion.chunker import chunk_document, contextualize
 from app.services.ingestion.embedder import Embedder
 from app.services.ingestion import jobs as job_service
 from app.services.ingestion.parser import parse_document
@@ -113,7 +113,9 @@ class IngestionService:
             chunks = chunk_document(parsed)
 
             await job_service.mark_stage(db, job, IngestionJobStage.EMBED)
-            embeddings = await self.embedder.embed_texts([c.content for c in chunks])
+            embeddings = await self.embedder.embed_texts(
+                [contextualize(doc.original_filename, c.heading, c.content) for c in chunks]
+            )
             emb_model = await self._active_embedding_model(db)
 
             existing = await db.execute(

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
+from typing import Any
 
 from app.services.ingestion.parser import ParsedDocument, ParsedPage
 
@@ -18,9 +20,37 @@ class TextChunk:
     meta: dict
 
 
-def estimate_tokens(text: str) -> int:
-    # Rough heuristic (~4 chars/token) — avoids hard dependency on tiktoken at import time
-    return max(1, len(text) // 4)
+@lru_cache(maxsize=1)
+def _encoder() -> Any:
+    try:
+        import tiktoken
+
+        return tiktoken.get_encoding("cl100k_base")
+    except Exception:  # noqa: BLE001 - offline / missing encoding file
+        return None
+
+
+def count_tokens(text: str) -> int:
+    """Exact cl100k token count; falls back to ~4 chars/token if tiktoken is unavailable."""
+    enc = _encoder()
+    if enc is None:
+        return max(1, len(text) // 4)
+    return max(1, len(enc.encode(text, disallowed_special=())))
+
+
+# Backwards-compatible name used across the ingestion code.
+estimate_tokens = count_tokens
+
+
+def contextualize(title: str | None, heading: str | None, content: str) -> str:
+    """Text actually sent to the embedding model for a chunk.
+
+    Prefixing the document title and section heading lets a chunk like
+    "It must be renewed yearly." be found by a query about the policy it
+    belongs to. The stored chunk content stays unchanged.
+    """
+    header = " — ".join(part for part in (title, heading) if part)
+    return f"{header}\n\n{content}" if header else content
 
 
 def chunk_document(

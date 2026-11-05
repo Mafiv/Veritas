@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     github_api_key: str = ""
     anthropic_api_key: str = ""
+    deepseek_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     # Embeddings: "local" (fastembed/ONNX, no key), "openai", or "mock" (tests only).
     # embedding_dimensions must match the vector(N) column created by migration 011.
@@ -70,9 +71,16 @@ class Settings(BaseSettings):
     # HNSW search breadth; higher = better recall, slower.
     hnsw_ef_search: int = 80
     rerank_top_k: int = 8
-    enable_hyde: bool = True
-    enable_query_expansion: bool = True
+    # HyDE / multi-query each add an LLM round-trip before retrieval; off unless
+    # the eval shows a gain worth the latency.
+    enable_hyde: bool = False
+    enable_query_expansion: bool = False
     enable_reranker: bool = True
+    # Max tokens of source text placed in the prompt.
+    context_token_budget: int = 3000
+    # Abstain without calling the LLM when the best reranked source scores below
+    # this (cross-encoder sigmoid scale). 0 disables abstention.
+    min_relevance_score: float = 0.0
 
     # Stripe
     stripe_secret_key: str = ""
