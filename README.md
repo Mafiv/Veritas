@@ -10,6 +10,20 @@ documents don't cover a question, it says so instead of guessing.
 The retrieval pipeline is measured, not assumed. A small evaluation harness
 runs in CI, and every default below was picked from its numbers.
 
+![Chat with citations and the retrieval trace](docs/screenshots/chat-trace.png)
+
+*A question about two ingested PEPs: citation chips, the cited sources, and the
+"Why this answer?" trace with per-stage timings and per-source scores. This
+capture uses the mock LLM (no API key), so the answer text is canned; retrieval,
+citations and the trace are real.*
+
+<details>
+<summary>Documents: queued ingestion, chunk counts, summaries</summary>
+
+![Documents library](docs/screenshots/documents.png)
+
+</details>
+
 ## Results
 
 From [`backend/evaluation/RESULTS.md`](backend/evaluation/RESULTS.md): 41
