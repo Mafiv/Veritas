@@ -12,3 +12,19 @@
 41 answerable + 6 unanswerable questions over 10 PEPs (167 chunks). Embeddings: `BAAI/bge-small-en-v1.5`; cross-encoder: `Xenova/ms-marco-MiniLM-L-6-v2`. Latency is retrieval only (query embedding + search + rerank), CPU, single process.
 
 Abstention (`MIN_RELEVANCE_SCORE`): the configured **0.2** keeps 100% of answerable questions and abstains on 50% of unanswerable ones. The best-separating value on this set is 0.28 (98% kept / 100% abstained), but it is fit on only 6 negatives.
+
+## Latency vs workspace size
+
+`python -m evaluation.bench_scale` grows one workspace with synthetic chunks
+(corpus text, random vectors) and times a single search + lexical rerank (p50 of 15 queries):
+
+| Chunks in workspace | Legacy (in-memory) p50 | Postgres engine p50 |
+|---|---|---|
+| 1,000 | 263 ms | 31 ms |
+| 5,000 | 1,374 ms | 73 ms |
+| 20,000 | 5,780 ms | 137 ms |
+
+The legacy pipeline loads every chunk and rebuilds BM25 per query, so it grows
+linearly (and ran 4× per question with query expansion on). The Postgres engine
+grows sub-linearly (20× data, 4.4× time); the remaining growth is keyword
+candidate ranking over common terms.
