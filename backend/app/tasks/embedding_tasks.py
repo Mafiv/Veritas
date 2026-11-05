@@ -1,37 +1,37 @@
-"""Background embedding / reprocessing tasks."""
+"""Document ingestion task (parse → chunk → embed → summarize)."""
 
 from __future__ import annotations
 
-import asyncio
+from typing import Any
 from uuid import UUID
 
+import httpx
+
 from app.tasks.celery_app import celery_app
+from app.tasks.runtime import run_async, worker_session
+
+# Retry only failures that are plausibly transient; a corrupt PDF will not fix itself.
+TRANSIENT_ERRORS = (httpx.TransportError, ConnectionError, TimeoutError)
 
 
-def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
-
-
-@celery_app.task(name="app.tasks.embedding_tasks.process_document")
-def process_document(document_id: str) -> dict:
-    from app.db.session import AsyncSessionLocal
+async def _process(document_id: UUID, job_id: UUID | None) -> dict[str, Any]:
     from app.services.ingestion.pipeline import IngestionService
 
-    async def _inner():
-        async with AsyncSessionLocal() as session:
-            svc = IngestionService()
-            doc = await svc.process_document(session, UUID(document_id))
+    async with worker_session() as session:
+        try:
+            doc = await IngestionService().process_document(session, document_id, job_id=job_id)
+        finally:
+            # The pipeline records FAILED status before re-raising; keep it.
             await session.commit()
-            return {
-                "document_id": str(doc.id),
-                "status": doc.status.value,
-                "chunks": doc.chunk_count,
-            }
+        return {"document_id": str(doc.id), "status": doc.status.value, "chunks": doc.chunk_count}
 
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            return asyncio.run(_inner())
-        return loop.run_until_complete(_inner())
-    except RuntimeError:
-        return asyncio.run(_inner())
+
+@celery_app.task(
+    name="app.tasks.embedding_tasks.process_document",
+    autoretry_for=TRANSIENT_ERRORS,
+    retry_backoff=True,
+    retry_backoff_max=60,
+    max_retries=3,
+)
+def process_document(document_id: str, job_id: str | None = None) -> dict[str, Any]:
+    return run_async(_process(UUID(document_id), UUID(job_id) if job_id else None))

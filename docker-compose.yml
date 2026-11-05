@@ -1,5 +1,4 @@
 # Fast local dev: shared backend image, Next.js dev server (no production build).
-# Optional worker: docker compose --profile worker up
 # Production frontend build: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 
 x-backend: &backend
@@ -65,6 +64,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       FRONTEND_URL: http://localhost:3000
       LOCAL_STORAGE_PATH: /app/storage
+      # Uploads return 202 and are processed by the worker service.
+      INGEST_INLINE: "false"
       BETTER_AUTH_URL: http://localhost:3000
       # Hybrid (frontend on host): host.docker.internal. Full Docker: set BETTER_AUTH_INTERNAL_URL=http://frontend:3000
       BETTER_AUTH_INTERNAL_URL: ${BETTER_AUTH_INTERNAL_URL:-http://host.docker.internal:3000}
@@ -85,7 +86,6 @@ services:
 
   worker:
     <<: *backend
-    profiles: [worker]
     env_file:
       - ./backend/.env
     environment:

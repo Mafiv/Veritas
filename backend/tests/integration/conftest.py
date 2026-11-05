@@ -11,6 +11,7 @@ import uuid
 from collections.abc import AsyncIterator
 
 import pytest
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models.domain import Document, DocumentStatus, DocumentType, User, Workspace
@@ -27,7 +28,9 @@ async def db() -> AsyncIterator[AsyncSession]:
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.connect() as conn:
         trans = await conn.begin()
-        session = AsyncSession(bind=conn, join_transaction_mode="create_savepoint")
+        session = AsyncSession(
+            bind=conn, join_transaction_mode="create_savepoint", expire_on_commit=False
+        )
         try:
             yield session
         finally:
@@ -61,3 +64,57 @@ async def make_document(db: AsyncSession, user: User, ws: Workspace, name: str) 
     db.add(doc)
     await db.flush()
     return doc
+
+
+@pytest.fixture
+async def api(db: AsyncSession):
+    """HTTP client against the real app, sharing the test transaction.
+
+    Authentication is replaced by a header-selected user so tests can act as
+    different people; everything else (roles, quotas, retrieval) is real.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api.deps import get_current_user
+    from app.core.exceptions import UnauthorizedError
+    from app.db.session import get_db
+    from app.main import app
+
+    async def _db() -> AsyncIterator[AsyncSession]:
+        yield db
+        await db.flush()
+
+    async def _user(request: Request) -> User:
+        user_id = request.headers.get("x-test-user")
+        if not user_id:
+            raise UnauthorizedError("Missing authentication token")
+        user = await db.get(User, uuid.UUID(user_id))
+        assert user is not None
+        return user
+
+    class _SameSession:
+        """Stand-in for AsyncSessionLocal() used by the SSE generator."""
+
+        async def __aenter__(self) -> AsyncSession:
+            return db
+
+        async def __aexit__(self, *_: object) -> None:
+            await db.flush()
+
+    import app.db.session as session_module
+
+    original_factory = session_module.AsyncSessionLocal
+    session_module.AsyncSessionLocal = lambda: _SameSession()  # type: ignore[assignment]
+    app.dependency_overrides[get_db] = _db
+    app.dependency_overrides[get_current_user] = _user
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        yield client
+    app.dependency_overrides.clear()
+    session_module.AsyncSessionLocal = original_factory
+
+
+async def add_member(db: AsyncSession, ws: Workspace, user: User, role: str = "owner") -> None:
+    from app.models.domain import WorkspaceMember, WorkspaceRole
+
+    db.add(WorkspaceMember(workspace_id=ws.id, user_id=user.id, role=WorkspaceRole(role)))
+    await db.flush()

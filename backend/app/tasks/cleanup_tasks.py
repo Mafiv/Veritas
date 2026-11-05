@@ -2,32 +2,22 @@
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 from app.core.config import get_settings
 from app.tasks.celery_app import celery_app
-
-
-def _run(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            return asyncio.run(coro)
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
+from app.tasks.runtime import run_async
 
 
 @celery_app.task(name="app.tasks.cleanup_tasks.cleanup_orphaned_files")
 def cleanup_orphaned_files() -> dict:
-    return _run(_cleanup())
+    return run_async(_cleanup())
 
 
 async def _cleanup() -> dict:
     from sqlalchemy import select
 
-    from app.db.session import AsyncSessionLocal
+    from app.tasks.runtime import worker_session
     from app.models.domain import Document
 
     settings = get_settings()
@@ -35,7 +25,7 @@ async def _cleanup() -> dict:
     if not root.exists():
         return {"removed": 0, "path": str(root)}
 
-    async with AsyncSessionLocal() as session:
+    async with worker_session() as session:
         paths = set((await session.execute(select(Document.storage_path))).scalars().all())
 
     removed = 0

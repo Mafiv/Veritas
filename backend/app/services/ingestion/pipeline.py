@@ -31,7 +31,10 @@ from app.services.ingestion.embedder import Embedder
 from app.services.ingestion import jobs as job_service
 from app.services.ingestion.parser import parse_document
 from app.services.llm.client import LLMClient
+from app.services.monitoring.logger import get_logger
 from app.services.notifications.service import notify_user
+
+log = get_logger("veritas.ingestion")
 
 
 class IngestionService:
@@ -147,19 +150,26 @@ class IngestionService:
             doc.meta = {**(doc.meta or {}), **parsed.meta}
 
             await job_service.mark_stage(db, job, IngestionJobStage.SUMMARIZE)
-            summary = await self.llm.complete(
-                system="Summarize the document in 2-3 concise sentences for a research assistant preview.",
-                user=parsed.text[:6000],
-                max_tokens=200,
-            )
-            questions_raw = await self.llm.complete(
-                system=(
-                    "Suggest 5 insightful questions a user could ask about this document. "
-                    "One question per line."
-                ),
-                user=parsed.text[:4000],
-                max_tokens=250,
-            )
+            # Chunks + embeddings are what make a document searchable. Summary and
+            # suggested questions are enrichment: an LLM outage must not fail the
+            # document, so they degrade to empty instead.
+            try:
+                summary = await self.llm.complete(
+                    system="Summarize the document in 2-3 concise sentences for a research assistant preview.",
+                    user=parsed.text[:6000],
+                    max_tokens=200,
+                )
+                questions_raw = await self.llm.complete(
+                    system=(
+                        "Suggest 5 insightful questions a user could ask about this document. "
+                        "One question per line."
+                    ),
+                    user=parsed.text[:4000],
+                    max_tokens=250,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("ingestion.enrichment_failed", document_id=str(doc.id), error=str(exc))
+                summary, questions_raw = "", ""
             questions = [
                 q.strip(" -•\t0123456789.") for q in questions_raw.splitlines() if q.strip()
             ][:5]
