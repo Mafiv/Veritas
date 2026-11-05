@@ -67,7 +67,7 @@ class CrossEncoderReranker:
 
     def _try_load_model(self):
         try:
-            from sentence_transformers import CrossEncoder  # type: ignore
+            from sentence_transformers import CrossEncoder
 
             return CrossEncoder(self.settings.reranker_model)
         except Exception:
