@@ -3,7 +3,7 @@
 import pytest
 
 from app.core.config import Settings, get_settings
-from app.services.retrieval.reranker import CrossEncoderReranker
+from app.services.retrieval.reranker import LexicalReranker
 from app.services.retrieval.hybrid_search import ScoredChunk
 from app.services.llm.client import LLMClient
 
@@ -22,8 +22,8 @@ class FakeDoc:
         self.original_filename = "doc.md"
 
 
-def test_reranker_prefers_overlapping_passage():
-    reranker = CrossEncoderReranker()
+async def test_lexical_reranker_prefers_overlapping_passage():
+    reranker = LexicalReranker()
     candidates = [
         ScoredChunk(chunk=FakeChunk("unrelated gardening tips"), document=FakeDoc(), score=0.5),
         ScoredChunk(
@@ -32,7 +32,7 @@ def test_reranker_prefers_overlapping_passage():
             score=0.4,
         ),
     ]
-    ranked = reranker.rerank("hybrid search bm25", candidates, top_k=2)
+    ranked = await reranker.rerank("hybrid search bm25", candidates, top_k=2)
     assert "hybrid" in ranked[0].chunk.content
 
 
