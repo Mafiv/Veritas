@@ -103,7 +103,9 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info
+    # Each worker process loads the embedding model; one per CPU (Celery's
+    # default) ran out of memory on a 4 GB Docker host.
+    command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info --concurrency=${WORKER_CONCURRENCY:-2}
 
   frontend:
     image: veritas-frontend-dev
