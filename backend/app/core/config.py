@@ -76,8 +76,12 @@ class Settings(BaseSettings):
     # Max tokens of source text placed in the prompt.
     context_token_budget: int = 3000
     # Abstain without calling the LLM when the best reranked source scores below
-    # this (cross-encoder sigmoid scale). 0 disables abstention.
-    min_relevance_score: float = 0.0
+    # this. The scale depends on RERANKER_BACKEND, so re-tune with
+    # `python -m evaluation.run` when switching. 0 disables abstention.
+    # 0.20 is deliberately below the eval's best-separating value (~0.28, fit on
+    # only 6 negatives): a false refusal is worse than the LLM saying the sources
+    # do not cover it.
+    min_relevance_score: float = 0.2
 
     # Stripe
     stripe_secret_key: str = ""
@@ -119,7 +123,9 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
 
     # Reranking
-    reranker_backend: Literal["lexical", "cross_encoder"] = "cross_encoder"
+    # Chosen by evaluation/: lexical beat the MS MARCO cross-encoder on our
+    # technical-docs eval (R@5 0.93 vs 0.85) at ~75 ms vs ~2.8 s on CPU.
+    reranker_backend: Literal["lexical", "cross_encoder"] = "lexical"
     reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
 
     @model_validator(mode="after")

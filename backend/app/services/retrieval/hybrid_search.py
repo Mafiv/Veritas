@@ -1,4 +1,4 @@
-"""Hybrid retrieval: pgvector HNSW + Postgres full-text search, fused with RRF.
+"""Hybrid retrieval: pgvector HNSW + Postgres full-text candidates scored with BM25, fused with RRF.
 
 Both rankings run inside Postgres and return a bounded candidate list
 (``settings.retrieval_candidates`` each), so query cost no longer grows with
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import re
+import time
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import Text, cast, func, select, text
+from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -34,7 +36,7 @@ class ScoredChunk:
     document: Document
     score: float
     vector_score: float = 0.0  # cosine similarity (1 - cosine distance)
-    keyword_score: float = 0.0  # ts_rank_cd over the generated tsvector
+    keyword_score: float = 0.0  # BM25 over GIN-matched candidates
 
 
 TOKEN_RE = re.compile(r"[a-z0-9]+", re.I)
@@ -114,6 +116,27 @@ def keyword_tsquery(query: str) -> Any:
     return func.to_tsquery("english", func.replace(plain, "&", "|"))
 
 
+STATS_TTL_SECONDS = 60.0
+_STATS_CACHE: dict[UUID, tuple[float, int, float]] = {}
+_TSV_ENTRY = re.compile(r"'((?:[^']|'')+)'(?::([0-9A-D,]+))?")
+
+
+def _quote(lexeme: str) -> str:
+    return "'" + lexeme.replace("'", "''") + "'"
+
+
+def _term_frequencies(tsv_text: str, lexemes: list[str]) -> dict[str, int]:
+    """Occurrences of each query lexeme, read from a tsvector's text form."""
+    wanted = set(lexemes)
+    out: dict[str, int] = {}
+    for match in _TSV_ENTRY.finditer(tsv_text):
+        lexeme = match.group(1).replace("''", "'")
+        if lexeme in wanted:
+            positions = match.group(2)
+            out[lexeme] = len(positions.split(",")) if positions else 1
+    return out
+
+
 class HybridSearcher:
     def __init__(self, embedder: Embedder | None = None):
         self.embedder = embedder or Embedder()
@@ -162,20 +185,92 @@ class HybridSearcher:
         document_ids: list[UUID] | None,
         limit: int,
     ) -> list[tuple[UUID, float]]:
-        """Top-N chunk ids by full-text rank via the GIN index."""
+        """Top-N chunk ids by Okapi BM25, with candidates from the GIN index.
+
+        Postgres' ``ts_rank_cd`` has no IDF, so frequent words weigh as much as
+        rare ones (it scored R@5 0.78 vs 0.90 for BM25 in our eval). We keep
+        Postgres for candidate generation (``@@`` on the GIN index) and score
+        those candidates with BM25 using per-term document frequencies, which
+        are cheap GIN-backed counts for just the query's lexemes.
+        """
+        lexemes = await self._query_lexemes(db, query)
+        if not lexemes:
+            return []
         tsq = keyword_tsquery(query)
-        # Normalization 1: divide by 1 + log(document length).
-        rank = func.ts_rank_cd(DocumentChunk.content_tsv, tsq, 1)
-        stmt = select(DocumentChunk.id, rank.label("rank")).where(
-            DocumentChunk.content_tsv.op("@@")(tsq)
+        pool = select(
+            DocumentChunk.id,
+            cast(DocumentChunk.content_tsv, Text).label("tsv"),
+            DocumentChunk.token_count,
+        ).where(DocumentChunk.content_tsv.op("@@")(tsq))
+        pool = (
+            self._scope(pool, workspace_id, document_ids)
+            .order_by(func.ts_rank_cd(DocumentChunk.content_tsv, tsq, 1).desc(), DocumentChunk.id)
+            .limit(max(limit * 4, 200))
         )
-        stmt = (
-            self._scope(stmt, workspace_id, document_ids)
-            .order_by(rank.desc(), DocumentChunk.id)
-            .limit(limit)
-        )
-        rows = (await db.execute(stmt)).all()
-        return [(row.id, float(row.rank)) for row in rows]
+        rows = (await db.execute(pool)).all()
+        if not rows:
+            return []
+
+        n_docs, avgdl = await self._workspace_stats(db, workspace_id)
+        df = await self._document_frequencies(db, workspace_id, lexemes)
+        k1, b = 1.2, 0.75
+        idf = {
+            t: math.log(1 + (n_docs - df.get(t, 0) + 0.5) / (df.get(t, 0) + 0.5)) for t in lexemes
+        }
+        scored: list[tuple[UUID, float]] = []
+        for row in rows:
+            tf = _term_frequencies(row.tsv, lexemes)
+            dl = max(1, row.token_count or 1)
+            score = sum(
+                idf[t] * f * (k1 + 1) / (f + k1 * (1 - b + b * dl / avgdl)) for t, f in tf.items()
+            )
+            scored.append((row.id, score))
+        scored.sort(key=lambda x: (-x[1], str(x[0])))
+        return scored[:limit]
+
+    @staticmethod
+    async def _query_lexemes(db: AsyncSession, query: str) -> list[str]:
+        """Query terms after Postgres' own english stemming/stop-words (same as the index)."""
+        arr = func.tsvector_to_array(func.to_tsvector("english", query))
+        return list((await db.execute(select(arr))).scalar_one() or [])
+
+    async def _workspace_stats(self, db: AsyncSession, workspace_id: UUID) -> tuple[int, float]:
+        """(chunk count, mean chunk length) — cached briefly; only BM25 normalisation uses it."""
+        cached = _STATS_CACHE.get(workspace_id)
+        if cached and cached[0] > time.monotonic():
+            return cached[1], cached[2]
+        n, avgdl = (
+            await db.execute(
+                select(func.count(), func.avg(DocumentChunk.token_count)).where(
+                    DocumentChunk.workspace_id == workspace_id
+                )
+            )
+        ).one()
+        stats = (int(n or 0), float(avgdl or 1.0))
+        _STATS_CACHE[workspace_id] = (time.monotonic() + STATS_TTL_SECONDS, *stats)
+        return stats
+
+    @staticmethod
+    async def _document_frequencies(
+        db: AsyncSession, workspace_id: UUID, lexemes: list[str]
+    ) -> dict[str, int]:
+        cols = [
+            func.count()
+            .filter(DocumentChunk.content_tsv.op("@@")(cast(func.quote_literal(t), TSQUERY)))
+            .label(f"t{i}")
+            for i, t in enumerate(lexemes)
+        ]
+        row = (
+            await db.execute(
+                select(*cols).where(
+                    DocumentChunk.workspace_id == workspace_id,
+                    DocumentChunk.content_tsv.op("@@")(
+                        func.to_tsquery("simple", " | ".join(_quote(t) for t in lexemes))
+                    ),
+                )
+            )
+        ).one()
+        return {t: int(row[i]) for i, t in enumerate(lexemes)}
 
     async def search(
         self,

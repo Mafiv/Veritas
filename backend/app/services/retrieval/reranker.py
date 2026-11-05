@@ -1,11 +1,13 @@
 """Second-stage reranking of fused candidates.
 
-- ``CrossEncoderReranker``: a real cross-encoder (MS MARCO MiniLM, ONNX via
-  fastembed). It reads query and passage together, which is far more precise
-  than first-stage similarity. Raw logits are squashed with a sigmoid so the
-  score lies in (0, 1) and can drive the abstention threshold.
-- ``LexicalReranker``: term-overlap heuristic used only as a fallback (tests,
-  or when the model cannot be loaded). It is *not* a cross-encoder.
+- ``LexicalReranker`` (default): blends the fused retrieval score with query
+  term coverage, density and bigram matches. Cheap and, on our evaluation over
+  technical documentation, the most accurate option (see evaluation/).
+- ``CrossEncoderReranker`` (optional): MS MARCO MiniLM via fastembed/ONNX.
+  It reads query and passage jointly, but was trained on web search queries:
+  on our eval it lost to the lexical reranker (R@5 0.85 vs 0.93) and costs
+  ~2.8 s per query on CPU for 20 full-size chunks. Logits are sigmoid-squashed
+  into (0, 1).
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ def _sigmoid(x: float) -> float:
 
 
 class LexicalReranker:
-    """Term-overlap heuristic (fallback only)."""
+    """Fused score blended with query-term coverage, density and bigram matches."""
 
     name = "lexical"
 

@@ -37,3 +37,17 @@ def test_mock_embedding_normalized_and_deterministic():
     assert abs(sum(x * x for x in a) - 1.0) < 1e-6
     assert cosine_similarity(a, b) > 0.99
     assert cosine_similarity(a, c) < 0.99
+
+
+def test_term_frequencies_parses_tsvector_text():
+    from app.services.retrieval.hybrid_search import _term_frequencies
+
+    tsv = "'cat':1,7 'dog':3 'o''brien':5 'mat':2A,9B"
+    assert _term_frequencies(tsv, ["cat", "dog", "mat", "o'brien", "zebra"]) == {
+        "cat": 2,
+        "dog": 1,
+        "mat": 2,
+        "o'brien": 1,
+    }
+    # Positions are omitted for stripped tsvectors: count as one occurrence.
+    assert _term_frequencies("'cat'", ["cat"]) == {"cat": 1}

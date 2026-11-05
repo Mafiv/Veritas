@@ -178,7 +178,7 @@ class RAGOrchestrator:
 
         trace.top_score = round(candidates[0].score, 4) if candidates else None
         trace.abstained = not candidates or (
-            trace.reranker == "cross_encoder"
+            trace.reranker != "none"
             and s.min_relevance_score > 0
             and candidates[0].score < s.min_relevance_score
         )

@@ -108,3 +108,17 @@ async def test_deleted_and_out_of_scope_documents_are_excluded(db: AsyncSession)
     )
     assert {h.document.id for h in scoped} == {other.id}
     assert await searcher.search(db, workspace_id=ws.id, query="x", document_ids=[]) == []
+
+
+async def test_keyword_bm25_prefers_rare_terms(db: AsyncSession) -> None:
+    """ts_rank_cd alone has no IDF; BM25 must rank the rare-term match first."""
+    searcher = _searcher()
+    user, ws = await make_workspace(db)
+    common = ["The policy applies to every employee and every policy holder."] * 6
+    rare = ["Quarantine rules are described in the annex."]
+    await _seed(db, searcher.embedder, ws, user, "mixed.txt", common + rare)
+
+    hits = await searcher.search(
+        db, workspace_id=ws.id, query="policy quarantine", mode="keyword", top_k=3
+    )
+    assert hits[0].chunk.content == rare[0]
