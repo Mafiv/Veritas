@@ -247,7 +247,7 @@ backend/
   evaluation/         corpus, questions, eval runner, scale benchmark, results
   tests/              unit/ and integration/ (real Postgres)
 frontend/src/         Next.js app (chat, documents, collections, settings)
-docs/                 SCHEMA.md (data model), ROADMAP.md
+docs/                 SCHEMA.md (data model), screenshots/
 ```
 
 ## Limitations and next steps
@@ -261,8 +261,6 @@ docs/                 SCHEMA.md (data model), ROADMAP.md
   IdP login flow.
 - There are no frontend tests or end-to-end browser tests yet.
 - Migration downgrades below `011` are broken; only upgrades are checked in CI.
-
-See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 

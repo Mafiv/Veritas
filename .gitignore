@@ -24,5 +24,3 @@ backend/storage/
 .turbo/
 coverage/
 
-# Claude Code local state (worktrees, settings)
-.claude/
