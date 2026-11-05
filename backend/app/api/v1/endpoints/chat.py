@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession, RequireEditor, RequireViewer
+from app.api.rate_limit import limit_per_user
 from app.core.exceptions import NotFoundError
 from app.models.domain import (
     ChatMessage,
@@ -227,7 +228,11 @@ async def _resolve_document_scope(
     )
 
 
-@router.post("/workspaces/{workspace_id}/chat", response_model=ChatQueryResponse)
+@router.post(
+    "/workspaces/{workspace_id}/chat",
+    response_model=ChatQueryResponse,
+    dependencies=[limit_per_user("chat", "rate_limit_chat_per_minute")],
+)
 async def chat_query(
     workspace_id: UUID,
     body: ChatQueryRequest,
@@ -313,7 +318,10 @@ async def chat_query(
     )
 
 
-@router.post("/workspaces/{workspace_id}/chat/stream")
+@router.post(
+    "/workspaces/{workspace_id}/chat/stream",
+    dependencies=[limit_per_user("chat", "rate_limit_chat_per_minute")],
+)
 async def chat_stream(
     workspace_id: UUID,
     body: ChatQueryRequest,

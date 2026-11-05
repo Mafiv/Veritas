@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
-from app.core.exceptions import VeritasError, error_payload
+from app.core.exceptions import RateLimitError, VeritasError, error_payload
 from app.db.session import engine
 from app.models import domain  # noqa: F401 — register models
 from app.models.schemas import HealthResponse
@@ -50,7 +50,12 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(VeritasError)
     async def veritas_error_handler(_: Request, exc: VeritasError):
-        return JSONResponse(status_code=exc.status_code, content=error_payload(exc))
+        headers = None
+        if isinstance(exc, RateLimitError) and exc.retry_after:
+            headers = {"Retry-After": str(exc.retry_after)}
+        return JSONResponse(
+            status_code=exc.status_code, content=error_payload(exc), headers=headers
+        )
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     async def health() -> HealthResponse:

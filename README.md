@@ -154,10 +154,9 @@ Opinionated **archival ink + signal teal** identity — Space Grotesk (display) 
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/v1/auth/register` | Create account + personal workspace |
-| POST | `/api/v1/auth/login` | JWT login (+ refresh token, login history) |
-| POST | `/api/v1/auth/refresh` | Rotate refresh token |
-| POST | `/api/v1/auth/logout` | Revoke refresh token |
+| POST | `/api/v1/auth/bootstrap` | Provision user + personal workspace (Better Auth hook, internal secret) |
+| POST | `/api/v1/auth/sync` | Provision/link user from a Better Auth JWT (rate-limited per IP) |
+| GET | `/api/v1/auth/me` | Current user |
 | GET | `/api/v1/workspaces` | List workspaces |
 | GET/POST/PATCH/DELETE | `/api/v1/workspaces/{id}/members` | Member management (owner) |
 | POST | `/api/v1/workspaces/{id}/invitations` | Invite by email |
