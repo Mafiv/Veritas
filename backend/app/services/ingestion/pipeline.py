@@ -146,9 +146,7 @@ class IngestionService:
                 max_tokens=250,
             )
             questions = [
-                q.strip(" -•\t0123456789.")
-                for q in questions_raw.splitlines()
-                if q.strip()
+                q.strip(" -•\t0123456789.") for q in questions_raw.splitlines() if q.strip()
             ][:5]
 
             doc.summary = summary
@@ -280,9 +278,7 @@ class IngestionService:
     async def _extract_entities(self, db: AsyncSession, doc: Document, text: str) -> None:
         """Lightweight entity extraction — capitalized phrases + dates."""
         # Clear prior mentions for this document
-        old = await db.execute(
-            select(DocumentEntity).where(DocumentEntity.document_id == doc.id)
-        )
+        old = await db.execute(select(DocumentEntity).where(DocumentEntity.document_id == doc.id))
         for row in old.scalars().all():
             await db.delete(row)
         await db.flush()

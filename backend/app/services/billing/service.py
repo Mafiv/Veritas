@@ -173,9 +173,7 @@ async def bump_meter(
     return meter
 
 
-async def get_meter_quantity(
-    db: AsyncSession, *, workspace_id: UUID, meter_key: str
-) -> int:
+async def get_meter_quantity(db: AsyncSession, *, workspace_id: UUID, meter_key: str) -> int:
     start, _ = _day_period()
     meter = (
         await db.execute(
@@ -189,9 +187,7 @@ async def get_meter_quantity(
     return int(meter.quantity) if meter else 0
 
 
-async def check_query_quota_metered(
-    db: AsyncSession, *, user: User, workspace_id: UUID
-) -> None:
+async def check_query_quota_metered(db: AsyncSession, *, user: User, workspace_id: UUID) -> None:
     limits = await plan_limits_from_db(db, user.plan)
     # Keep legacy counter in sync for UsageStats
     now = datetime.now(timezone.utc)
@@ -270,9 +266,7 @@ async def record_invoice(
     paid_at: datetime | None = None,
 ) -> Invoice:
     existing = (
-        await db.execute(
-            select(Invoice).where(Invoice.stripe_invoice_id == stripe_invoice_id)
-        )
+        await db.execute(select(Invoice).where(Invoice.stripe_invoice_id == stripe_invoice_id))
     ).scalar_one_or_none()
     if existing:
         existing.status = status
@@ -301,11 +295,7 @@ async def record_invoice(
 async def list_plans(db: AsyncSession) -> list[Plan]:
     await ensure_default_plans(db)
     return list(
-        (
-            await db.execute(
-                select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.sort_order)
-            )
-        )
+        (await db.execute(select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.sort_order)))
         .scalars()
         .all()
     )

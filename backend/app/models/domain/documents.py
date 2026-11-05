@@ -36,7 +36,7 @@ from app.models.domain.base import (
 )
 
 if TYPE_CHECKING:
-    from app.models.domain.identity import User, Workspace
+    from app.models.domain.identity import Workspace
 
 
 class EmbeddingModel(Base, TimestampMixin):
@@ -93,13 +93,20 @@ class Document(Base, TimestampMixin, SoftDeleteMixin):
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     meta: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
     active_version_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("document_versions.id", ondelete="SET NULL", use_alter=True, name="fk_documents_active_version"),
+        ForeignKey(
+            "document_versions.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_documents_active_version",
+        ),
         nullable=True,
     )
 
     workspace: Mapped["Workspace"] = relationship(back_populates="documents")
     chunks: Mapped[list[DocumentChunk]] = relationship(
-        back_populates="document", cascade="all, delete-orphan", foreign_keys="DocumentChunk.document_id"
+        back_populates="document",
+        cascade="all, delete-orphan",
+        foreign_keys="DocumentChunk.document_id",
     )
     versions: Mapped[list[DocumentVersion]] = relationship(
         back_populates="document",
@@ -144,9 +151,7 @@ class DocumentVersion(Base, TimestampMixin):
     change_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     meta: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
 
-    document: Mapped[Document] = relationship(
-        back_populates="versions", foreign_keys=[document_id]
-    )
+    document: Mapped[Document] = relationship(back_populates="versions", foreign_keys=[document_id])
 
 
 class DocumentChunk(Base, TimestampMixin):
@@ -155,7 +160,9 @@ class DocumentChunk(Base, TimestampMixin):
     __tablename__ = "document_chunks"
     __table_args__ = (
         Index("ix_document_chunks_workspace_document", "workspace_id", "document_id"),
-        UniqueConstraint("document_id", "chunk_index", "document_version_id", name="uq_chunk_index_version"),
+        UniqueConstraint(
+            "document_id", "chunk_index", "document_version_id", name="uq_chunk_index_version"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
@@ -222,9 +229,7 @@ class DocumentPermission(Base, TimestampMixin):
     """Granular page/section ACL beyond workspace role."""
 
     __tablename__ = "document_permissions"
-    __table_args__ = (
-        Index("ix_document_permissions_document_user", "document_id", "user_id"),
-    )
+    __table_args__ = (Index("ix_document_permissions_document_user", "document_id", "user_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     document_id: Mapped[uuid.UUID] = mapped_column(
@@ -292,7 +297,9 @@ class Entity(Base, TimestampMixin):
 
     __tablename__ = "entities"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "normalized_name", "entity_type", name="uq_entity_workspace"),
+        UniqueConstraint(
+            "workspace_id", "normalized_name", "entity_type", name="uq_entity_workspace"
+        ),
         Index("ix_entities_workspace_type", "workspace_id", "entity_type"),
     )
 

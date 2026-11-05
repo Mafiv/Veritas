@@ -33,9 +33,7 @@ async def mark_notification_read(
     db: DbSession,
     user: CurrentUser,
 ) -> NotificationOut:
-    row = await notif_service.mark_read(
-        db, user_id=user.id, notification_id=notification_id
-    )
+    row = await notif_service.mark_read(db, user_id=user.id, notification_id=notification_id)
     if not row:
         raise NotFoundError("Notification not found")
     return NotificationOut.model_validate(row)

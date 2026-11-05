@@ -14,7 +14,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -27,13 +26,12 @@ from app.models.domain.base import (
     PlanTier,
     SubscriptionStatus,
     TimestampMixin,
-    UsageEventType,
     UUID,
     new_uuid,
 )
 
 if TYPE_CHECKING:
-    from app.models.domain.identity import User, Workspace
+    from app.models.domain.identity import User
 
 
 class Plan(Base, TimestampMixin):
@@ -136,9 +134,7 @@ class UsageMeter(Base, TimestampMixin):
 
     __tablename__ = "usage_meters"
     __table_args__ = (
-        UniqueConstraint(
-            "workspace_id", "meter_key", "period_start", name="uq_usage_meter_period"
-        ),
+        UniqueConstraint("workspace_id", "meter_key", "period_start", name="uq_usage_meter_period"),
         Index("ix_usage_meters_workspace_period", "workspace_id", "period_start"),
     )
 

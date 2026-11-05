@@ -36,8 +36,18 @@ def upgrade() -> None:
         sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("title", sa.String(300), nullable=False, server_default="New conversation"),
         sa.Column("is_shared", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="RESTRICT"),
@@ -57,14 +67,26 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("thread_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("document_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["thread_id"], ["chat_threads.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("thread_id", "document_id", name="uq_thread_document"),
     )
     op.create_index("ix_chat_thread_documents_thread_id", "chat_thread_documents", ["thread_id"])
-    op.create_index("ix_chat_thread_documents_document_id", "chat_thread_documents", ["document_id"])
+    op.create_index(
+        "ix_chat_thread_documents_document_id", "chat_thread_documents", ["document_id"]
+    )
 
     op.create_table(
         "chat_messages",
@@ -76,8 +98,18 @@ def upgrade() -> None:
         sa.Column("feedback", sa.String(20), nullable=True),
         sa.Column("token_usage", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("latency_ms", sa.Float(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["thread_id"], ["chat_threads.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_chat_messages_thread_id", "chat_messages", ["thread_id"])
@@ -94,8 +126,18 @@ def upgrade() -> None:
         sa.Column("score", sa.Float(), nullable=False, server_default="0"),
         sa.Column("page_number", sa.Integer(), nullable=True),
         sa.Column("heading", sa.String(500), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["message_id"], ["chat_messages.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["chunk_id"], ["document_chunks.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="RESTRICT"),
@@ -112,8 +154,18 @@ def upgrade() -> None:
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("vote", feedback_vote, nullable=False),
         sa.Column("comment", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["message_id"], ["chat_messages.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("message_id", "user_id", name="uq_message_feedback_user"),
@@ -128,15 +180,27 @@ def upgrade() -> None:
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("parent_comment_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("body", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["thread_id"], ["chat_threads.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["parent_comment_id"], ["thread_comments.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_thread_comments_thread_id", "thread_comments", ["thread_id"])
     op.create_index("ix_thread_comments_user_id", "thread_comments", ["user_id"])
-    op.create_index("ix_thread_comments_parent_comment_id", "thread_comments", ["parent_comment_id"])
+    op.create_index(
+        "ix_thread_comments_parent_comment_id", "thread_comments", ["parent_comment_id"]
+    )
     op.create_index(
         "ix_thread_comments_thread_created", "thread_comments", ["thread_id", "created_at"]
     )

@@ -74,9 +74,7 @@ async def list_threads(
     for t in threads:
         count = (
             await db.execute(
-                select(func.count())
-                .select_from(ChatMessage)
-                .where(ChatMessage.thread_id == t.id)
+                select(func.count()).select_from(ChatMessage).where(ChatMessage.thread_id == t.id)
             )
         ).scalar_one()
         out.append(_thread_out(t, count))
@@ -120,9 +118,7 @@ async def set_thread_documents(
     ).scalar_one_or_none()
     if not thread:
         raise NotFoundError("Thread not found")
-    await chat_service.set_thread_documents(
-        db, thread_id=thread_id, document_ids=body.document_ids
-    )
+    await chat_service.set_thread_documents(db, thread_id=thread_id, document_ids=body.document_ids)
     return body.document_ids
 
 
@@ -234,9 +230,7 @@ async def chat_query(
     user: CurrentUser,
     access: RequireEditor,
 ) -> ChatQueryResponse:
-    await billing_service.check_query_quota_metered(
-        db, user=user, workspace_id=workspace_id
-    )
+    await billing_service.check_query_quota_metered(db, user=user, workspace_id=workspace_id)
     _, member = access
 
     thread = await _get_or_create_thread(db, workspace_id, user.id, body.thread_id, body.question)
@@ -274,9 +268,7 @@ async def chat_query(
     )
     db.add(assistant)
     await db.flush()
-    await chat_service.persist_citations(
-        db, message_id=assistant.id, citations=result.citations
-    )
+    await chat_service.persist_citations(db, message_id=assistant.id, citations=result.citations)
 
     user.queries_today = (user.queries_today or 0) + 1
     await billing_service.record_usage(
@@ -319,9 +311,7 @@ async def chat_stream(
     user: CurrentUser,
     access: RequireEditor,
 ) -> StreamingResponse:
-    await billing_service.check_query_quota_metered(
-        db, user=user, workspace_id=workspace_id
-    )
+    await billing_service.check_query_quota_metered(db, user=user, workspace_id=workspace_id)
     _, member = access
 
     thread = await _get_or_create_thread(db, workspace_id, user.id, body.thread_id, body.question)

@@ -55,9 +55,13 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     queries_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    queries_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    queries_reset_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     avatar_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     memberships: Mapped[list[WorkspaceMember]] = relationship(back_populates="user")
     owned_workspaces: Mapped[list[Workspace]] = relationship(back_populates="owner")

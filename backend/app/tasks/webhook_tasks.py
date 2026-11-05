@@ -99,13 +99,17 @@ async def _rollup_meters() -> dict:
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     async with AsyncSessionLocal() as session:
         events = (
-            await session.execute(
-                select(UsageEvent).where(
-                    UsageEvent.created_at >= start,
-                    UsageEvent.workspace_id.is_not(None),
+            (
+                await session.execute(
+                    select(UsageEvent).where(
+                        UsageEvent.created_at >= start,
+                        UsageEvent.workspace_id.is_not(None),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         # Rebuild today's query meters from events (idempotent-ish: set absolute)
         totals: dict[tuple, int] = {}
         for e in events:
@@ -151,12 +155,16 @@ async def _purge_all() -> dict:
 
     async with AsyncSessionLocal() as session:
         ws_ids = (
-            await session.execute(
-                select(DataRetentionPolicy.workspace_id)
-                .where(DataRetentionPolicy.is_active.is_(True))
-                .distinct()
+            (
+                await session.execute(
+                    select(DataRetentionPolicy.workspace_id)
+                    .where(DataRetentionPolicy.is_active.is_(True))
+                    .distinct()
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         results = []
         for ws_id in ws_ids:
             results.append(await apply_retention_purge(session, ws_id))

@@ -22,7 +22,11 @@ def process_document(document_id: str) -> dict:
             svc = IngestionService()
             doc = await svc.process_document(session, UUID(document_id))
             await session.commit()
-            return {"document_id": str(doc.id), "status": doc.status.value, "chunks": doc.chunk_count}
+            return {
+                "document_id": str(doc.id),
+                "status": doc.status.value,
+                "chunks": doc.chunk_count,
+            }
 
     try:
         loop = asyncio.get_event_loop()

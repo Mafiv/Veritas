@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import secrets
-from datetime import datetime, timezone
 
 from typing import Annotated
 
@@ -27,9 +26,7 @@ from app.services.identity import tokens as token_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)
-OptionalBearer = Annotated[
-    HTTPAuthorizationCredentials | None, Depends(_bearer)
-]
+OptionalBearer = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
 
 
 class RefreshRequest(BaseModel):
@@ -84,9 +81,7 @@ async def _provision_veritas_user(
     email = email.lower()
     full_name = full_name.strip()
     existing = await db.execute(
-        select(User).where(
-            (User.auth_user_id == auth_user_id) | (User.email == email)
-        )
+        select(User).where((User.auth_user_id == auth_user_id) | (User.email == email))
     )
     user = existing.scalar_one_or_none()
     if user:
@@ -119,16 +114,12 @@ async def _provision_veritas_user(
         # insert race — clear this session and return the winner's row.
         await db.rollback()
         raced = await db.execute(
-            select(User).where(
-                (User.auth_user_id == auth_user_id) | (User.email == email)
-            )
+            select(User).where((User.auth_user_id == auth_user_id) | (User.email == email))
         )
         winner = raced.scalar_one_or_none()
         if winner is None:
             raise
-        return BootstrapResponse(
-            id=str(winner.id), email=winner.email, created=False
-        )
+        return BootstrapResponse(id=str(winner.id), email=winner.email, created=False)
 
     base_slug = _slugify(f"{user.full_name}-workspace")
     slug = base_slug
@@ -179,8 +170,10 @@ async def bootstrap_user(
     """
     settings = get_settings()
     expected = settings.internal_auth_bootstrap_secret
-    if not expected or not x_internal_secret or not secrets.compare_digest(
-        x_internal_secret, expected
+    if (
+        not expected
+        or not x_internal_secret
+        or not secrets.compare_digest(x_internal_secret, expected)
     ):
         raise UnauthorizedError("Invalid bootstrap secret")
 
@@ -224,7 +217,6 @@ async def sync_user(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(body: RefreshRequest, db: DbSession, request: Request) -> TokenResponse:
     """Legacy refresh — prefer Better Auth session + JWT token endpoint."""
-    from app.core.security import create_access_token
 
     ip, ua = _client_meta(request)
     access, new_refresh, user = await token_service.rotate_refresh_token(

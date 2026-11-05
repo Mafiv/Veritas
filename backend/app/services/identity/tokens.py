@@ -32,8 +32,7 @@ async def issue_refresh_token(
     row = RefreshToken(
         user_id=user_id,
         token_hash=_hash(raw),
-        expires_at=datetime.now(timezone.utc)
-        + timedelta(days=settings.refresh_token_expire_days),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
         user_agent=user_agent,
         ip_address=ip_address,
     )
@@ -51,9 +50,7 @@ async def rotate_refresh_token(
 ) -> tuple[str, str, User]:
     """Validate refresh token, revoke it, issue new access + refresh pair."""
     row = (
-        await db.execute(
-            select(RefreshToken).where(RefreshToken.token_hash == _hash(raw_token))
-        )
+        await db.execute(select(RefreshToken).where(RefreshToken.token_hash == _hash(raw_token)))
     ).scalar_one_or_none()
     if not row:
         raise UnauthorizedError("Invalid refresh token")
@@ -95,9 +92,7 @@ async def rotate_refresh_token(
 
 async def revoke_refresh_token(db: AsyncSession, *, raw_token: str) -> None:
     row = (
-        await db.execute(
-            select(RefreshToken).where(RefreshToken.token_hash == _hash(raw_token))
-        )
+        await db.execute(select(RefreshToken).where(RefreshToken.token_hash == _hash(raw_token)))
     ).scalar_one_or_none()
     if row and row.revoked_at is None:
         row.revoked_at = datetime.now(timezone.utc)

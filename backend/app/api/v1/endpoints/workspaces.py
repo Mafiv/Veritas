@@ -12,7 +12,6 @@ from sqlalchemy import func, select
 from app.api.deps import (
     CurrentUser,
     DbSession,
-    RequireEditor,
     RequireOwner,
     RequireViewer,
 )
@@ -100,9 +99,7 @@ async def list_workspaces(db: DbSession, user: CurrentUser) -> list[WorkspaceOut
 
 
 @router.post("", response_model=WorkspaceOut)
-async def create_workspace(
-    body: WorkspaceCreate, db: DbSession, user: CurrentUser
-) -> WorkspaceOut:
+async def create_workspace(body: WorkspaceCreate, db: DbSession, user: CurrentUser) -> WorkspaceOut:
     limits = plan_limits(user.plan)
     owned = (
         await db.execute(

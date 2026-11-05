@@ -340,9 +340,7 @@ async def create_document_permission(
     return DocumentPermissionOut.model_validate(row)
 
 
-@router.delete(
-    "/workspaces/{workspace_id}/documents/{document_id}/permissions/{permission_id}"
-)
+@router.delete("/workspaces/{workspace_id}/documents/{document_id}/permissions/{permission_id}")
 async def delete_document_permission(
     workspace_id: UUID,
     document_id: UUID,
@@ -351,9 +349,7 @@ async def delete_document_permission(
     user: CurrentUser,
     _access: RequireOwner,
 ) -> dict:
-    await doc_service.revoke_permission(
-        db, document_id=document_id, permission_id=permission_id
-    )
+    await doc_service.revoke_permission(db, document_id=document_id, permission_id=permission_id)
     return {"ok": True}
 
 
@@ -511,9 +507,7 @@ async def add_collection_document(
     raise NotFoundError("Collection not found")
 
 
-@router.delete(
-    "/workspaces/{workspace_id}/collections/{collection_id}/documents/{document_id}"
-)
+@router.delete("/workspaces/{workspace_id}/collections/{collection_id}/documents/{document_id}")
 async def remove_collection_document(
     workspace_id: UUID,
     collection_id: UUID,

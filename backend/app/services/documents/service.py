@@ -31,9 +31,7 @@ async def list_versions(db: AsyncSession, document_id: UUID) -> list[DocumentVer
     return list(result.scalars().all())
 
 
-async def list_suggested_questions(
-    db: AsyncSession, document_id: UUID
-) -> list[SuggestedQuestion]:
+async def list_suggested_questions(db: AsyncSession, document_id: UUID) -> list[SuggestedQuestion]:
     result = await db.execute(
         select(SuggestedQuestion)
         .where(SuggestedQuestion.document_id == document_id)
@@ -83,18 +81,14 @@ async def grant_permission(
     return row
 
 
-async def list_permissions(
-    db: AsyncSession, document_id: UUID
-) -> list[DocumentPermission]:
+async def list_permissions(db: AsyncSession, document_id: UUID) -> list[DocumentPermission]:
     result = await db.execute(
         select(DocumentPermission).where(DocumentPermission.document_id == document_id)
     )
     return list(result.scalars().all())
 
 
-async def revoke_permission(
-    db: AsyncSession, *, document_id: UUID, permission_id: UUID
-) -> None:
+async def revoke_permission(db: AsyncSession, *, document_id: UUID, permission_id: UUID) -> None:
     row = await db.get(DocumentPermission, permission_id)
     if not row or row.document_id != document_id:
         raise NotFoundError("Permission not found")
@@ -121,25 +115,33 @@ async def readable_document_ids(
 
     # Viewer: exclude docs that have ACL rows the user is not on
     restricted = (
-        await db.execute(
-            select(DocumentPermission.document_id)
-            .join(Document, Document.id == DocumentPermission.document_id)
-            .where(Document.workspace_id == workspace_id, Document.deleted_at.is_(None))
-            .distinct()
+        (
+            await db.execute(
+                select(DocumentPermission.document_id)
+                .join(Document, Document.id == DocumentPermission.document_id)
+                .where(Document.workspace_id == workspace_id, Document.deleted_at.is_(None))
+                .distinct()
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not restricted:
         return document_ids
 
     allowed_restricted = (
-        await db.execute(
-            select(DocumentPermission.document_id).where(
-                DocumentPermission.document_id.in_(list(restricted)),
-                DocumentPermission.user_id == user_id,
-                DocumentPermission.can_read.is_(True),
+        (
+            await db.execute(
+                select(DocumentPermission.document_id).where(
+                    DocumentPermission.document_id.in_(list(restricted)),
+                    DocumentPermission.user_id == user_id,
+                    DocumentPermission.can_read.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     blocked = set(restricted) - set(allowed_restricted)
 
     base_q = select(Document.id).where(

@@ -56,8 +56,18 @@ def upgrade() -> None:
         sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.UniqueConstraint("name"),
     )
 
@@ -82,8 +92,18 @@ def upgrade() -> None:
         sa.Column("content_hash", sa.String(64), nullable=True),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("active_version_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["uploaded_by"], ["users.id"], ondelete="RESTRICT"),
@@ -108,8 +128,18 @@ def upgrade() -> None:
         sa.Column("uploaded_by", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("change_note", sa.Text(), nullable=True),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["uploaded_by"], ["users.id"], ondelete="RESTRICT"),
         sa.UniqueConstraint("document_id", "version_number", name="uq_document_version_number"),
@@ -146,20 +176,38 @@ def upgrade() -> None:
         sa.Column("embedding", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("embedding_model_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["document_version_id"], ["document_versions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["document_version_id"], ["document_versions.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["embedding_model_id"], ["embedding_models.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["embedding_model_id"], ["embedding_models.id"], ondelete="SET NULL"
+        ),
         sa.UniqueConstraint(
             "document_id", "chunk_index", "document_version_id", name="uq_chunk_index_version"
         ),
     )
     op.create_index("ix_document_chunks_document_id", "document_chunks", ["document_id"])
-    op.create_index("ix_document_chunks_document_version_id", "document_chunks", ["document_version_id"])
+    op.create_index(
+        "ix_document_chunks_document_version_id", "document_chunks", ["document_version_id"]
+    )
     op.create_index("ix_document_chunks_workspace_id", "document_chunks", ["workspace_id"])
-    op.create_index("ix_document_chunks_embedding_model_id", "document_chunks", ["embedding_model_id"])
+    op.create_index(
+        "ix_document_chunks_embedding_model_id", "document_chunks", ["embedding_model_id"]
+    )
     op.create_index(
         "ix_document_chunks_workspace_document", "document_chunks", ["workspace_id", "document_id"]
     )
@@ -173,13 +221,27 @@ def upgrade() -> None:
         sa.Column("summary_type", sa.String(40), nullable=False, server_default="auto"),
         sa.Column("model_name", sa.String(120), nullable=True),
         sa.Column("token_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["document_version_id"], ["document_versions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["document_version_id"], ["document_versions.id"], ondelete="CASCADE"
+        ),
     )
     op.create_index("ix_document_summaries_document_id", "document_summaries", ["document_id"])
-    op.create_index("ix_document_summaries_document_version_id", "document_summaries", ["document_version_id"])
+    op.create_index(
+        "ix_document_summaries_document_version_id", "document_summaries", ["document_version_id"]
+    )
 
     op.create_table(
         "suggested_questions",
@@ -188,8 +250,18 @@ def upgrade() -> None:
         sa.Column("question", sa.Text(), nullable=False),
         sa.Column("rank", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("model_name", sa.String(120), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_suggested_questions_document_id", "suggested_questions", ["document_id"])
@@ -206,8 +278,18 @@ def upgrade() -> None:
         sa.Column("section_heading", sa.String(500), nullable=True),
         sa.Column("can_read", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("can_cite", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["granted_by"], ["users.id"], ondelete="RESTRICT"),
@@ -225,8 +307,18 @@ def upgrade() -> None:
         sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="RESTRICT"),
@@ -241,14 +333,26 @@ def upgrade() -> None:
         sa.Column("collection_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("document_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("added_by", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["collection_id"], ["collections.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["added_by"], ["users.id"], ondelete="RESTRICT"),
         sa.UniqueConstraint("collection_id", "document_id", name="uq_collection_document"),
     )
-    op.create_index("ix_collection_documents_collection_id", "collection_documents", ["collection_id"])
+    op.create_index(
+        "ix_collection_documents_collection_id", "collection_documents", ["collection_id"]
+    )
     op.create_index("ix_collection_documents_document_id", "collection_documents", ["document_id"])
 
     op.create_table(
@@ -265,17 +369,33 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["document_version_id"], ["document_versions.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["document_version_id"], ["document_versions.id"], ondelete="SET NULL"
+        ),
     )
     op.create_index("ix_ingestion_jobs_workspace_id", "ingestion_jobs", ["workspace_id"])
     op.create_index("ix_ingestion_jobs_document_id", "ingestion_jobs", ["document_id"])
-    op.create_index("ix_ingestion_jobs_document_version_id", "ingestion_jobs", ["document_version_id"])
+    op.create_index(
+        "ix_ingestion_jobs_document_version_id", "ingestion_jobs", ["document_version_id"]
+    )
     op.create_index("ix_ingestion_jobs_celery_task_id", "ingestion_jobs", ["celery_task_id"])
-    op.create_index("ix_ingestion_jobs_document_status", "ingestion_jobs", ["document_id", "status"])
+    op.create_index(
+        "ix_ingestion_jobs_document_status", "ingestion_jobs", ["document_id", "status"]
+    )
     op.create_index(
         "ix_ingestion_jobs_workspace_created", "ingestion_jobs", ["workspace_id", "created_at"]
     )

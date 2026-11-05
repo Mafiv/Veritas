@@ -81,7 +81,7 @@ async def create_invitation(
         to=email_l,
         subject=f"You're invited to {ws.name} on Veritas",
         body=(
-            f"You've been invited to join the workspace \"{ws.name}\" as {role.value}.\n\n"
+            f'You\'ve been invited to join the workspace "{ws.name}" as {role.value}.\n\n'
             f"Accept: {accept_url}\n\n"
             f"This link expires at {invitation.expires_at.isoformat()}."
         ),

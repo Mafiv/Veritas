@@ -30,8 +30,7 @@ from app.models.domain.base import (
 )
 
 if TYPE_CHECKING:
-    from app.models.domain.documents import Document, DocumentChunk
-    from app.models.domain.identity import User, Workspace
+    from app.models.domain.identity import Workspace
 
 
 class ChatThread(Base, TimestampMixin, SoftDeleteMixin):
@@ -69,9 +68,7 @@ class ChatThreadDocument(Base, TimestampMixin):
     """Optional retrieval scope: which documents a thread may search."""
 
     __tablename__ = "chat_thread_documents"
-    __table_args__ = (
-        UniqueConstraint("thread_id", "document_id", name="uq_thread_document"),
-    )
+    __table_args__ = (UniqueConstraint("thread_id", "document_id", name="uq_thread_document"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     thread_id: Mapped[uuid.UUID] = mapped_column(
