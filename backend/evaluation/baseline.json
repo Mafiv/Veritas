@@ -1,0 +1,659 @@
+{
+  "dataset": "veritas-peps-v1",
+  "corpus": {
+    "documents": 10,
+    "chunks": 167,
+    "ingest_seconds": 64.5
+  },
+  "questions": {
+    "answerable": 41,
+    "unanswerable": 6
+  },
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "reranker_model": "Xenova/ms-marco-MiniLM-L-6-v2",
+  "shipped": "hybrid + lexical rerank",
+  "configs": {
+    "legacy (in-memory)": {
+      "recall@1": 0.585,
+      "recall@3": 0.878,
+      "recall@5": 0.927,
+      "recall@10": 0.951,
+      "mrr@10": 0.732,
+      "recall@5_lexical": 0.938,
+      "recall@5_paraphrase": 0.92,
+      "latency_p50_ms": 197.7,
+      "latency_p95_ms": 393.1
+    },
+    "vector": {
+      "recall@1": 0.39,
+      "recall@3": 0.683,
+      "recall@5": 0.78,
+      "recall@10": 0.878,
+      "mrr@10": 0.561,
+      "recall@5_lexical": 0.812,
+      "recall@5_paraphrase": 0.76,
+      "latency_p50_ms": 28.1,
+      "latency_p95_ms": 122.4
+    },
+    "keyword (BM25)": {
+      "recall@1": 0.634,
+      "recall@3": 0.829,
+      "recall@5": 0.878,
+      "recall@10": 0.902,
+      "mrr@10": 0.732,
+      "recall@5_lexical": 0.875,
+      "recall@5_paraphrase": 0.88,
+      "latency_p50_ms": 71.3,
+      "latency_p95_ms": 190.3
+    },
+    "hybrid": {
+      "recall@1": 0.488,
+      "recall@3": 0.756,
+      "recall@5": 0.854,
+      "recall@10": 0.927,
+      "mrr@10": 0.644,
+      "recall@5_lexical": 0.938,
+      "recall@5_paraphrase": 0.8,
+      "latency_p50_ms": 82.9,
+      "latency_p95_ms": 172.0
+    },
+    "hybrid + lexical rerank": {
+      "recall@1": 0.634,
+      "recall@3": 0.878,
+      "recall@5": 0.927,
+      "recall@10": 0.951,
+      "mrr@10": 0.756,
+      "recall@5_lexical": 0.938,
+      "recall@5_paraphrase": 0.92,
+      "latency_p50_ms": 87.4,
+      "latency_p95_ms": 193.4
+    },
+    "hybrid + cross-encoder": {
+      "recall@1": 0.561,
+      "recall@3": 0.829,
+      "recall@5": 0.854,
+      "recall@10": 0.878,
+      "mrr@10": 0.683,
+      "recall@5_lexical": 0.812,
+      "recall@5_paraphrase": 0.88,
+      "latency_p50_ms": 3193.0,
+      "latency_p95_ms": 5803.5
+    }
+  },
+  "abstention": {
+    "configured_min_relevance_score": 0.2,
+    "configured_answerable_kept": 1.0,
+    "configured_unanswerable_abstained": 0.5,
+    "suggested_min_relevance_score": 0.28,
+    "answerable_kept": 0.976,
+    "unanswerable_abstained": 1.0,
+    "answerable_top_score_p10": 0.2881,
+    "unanswerable_top_score_max": 0.2775
+  },
+  "per_question": {
+    "pep8-line-length": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 2,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 5
+      },
+      "shipped_top_score": 0.4157
+    },
+    "pep8-docstring-width": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 5,
+        "keyword (BM25)": 5,
+        "hybrid": 4,
+        "hybrid + lexical rerank": 2,
+        "hybrid + cross-encoder": 3
+      },
+      "shipped_top_score": 0.4636
+    },
+    "pep8-indent": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.5574
+    },
+    "pep8-tabs": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 3,
+        "keyword (BM25)": 1,
+        "hybrid": 3,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 3
+      },
+      "shipped_top_score": 0.4304
+    },
+    "pep8-blank-lines": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": null,
+        "keyword (BM25)": 1,
+        "hybrid": null,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.2553
+    },
+    "pep8-import-order": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.3594
+    },
+    "pep8-ambiguous-names": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 6,
+        "keyword (BM25)": 1,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 2,
+        "hybrid + cross-encoder": 2
+      },
+      "shipped_top_score": 0.4203
+    },
+    "pep8-none-compare": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4283
+    },
+    "pep8-startswith": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 2,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4145
+    },
+    "pep8-constants": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": null,
+        "keyword (BM25)": 1,
+        "hybrid": 3,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 3
+      },
+      "shipped_top_score": 0.2814
+    },
+    "pep8-encoding": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 6,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.557
+    },
+    "pep8-bare-except": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 3,
+        "vector": 3,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 3,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.28
+    },
+    "pep20-errors": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.3285
+    },
+    "pep20-one-way": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 6,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.3348
+    },
+    "pep20-namespaces": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.5574
+    },
+    "pep257-quotes": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 5,
+        "vector": 4,
+        "keyword (BM25)": 3,
+        "hybrid": 4,
+        "hybrid + lexical rerank": 5,
+        "hybrid + cross-encoder": 2
+      },
+      "shipped_top_score": 0.2881
+    },
+    "pep257-phrase": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 2,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 2
+      },
+      "shipped_top_score": 0.5573
+    },
+    "pep257-multiline": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 4,
+        "keyword (BM25)": 5,
+        "hybrid": 3,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4349
+    },
+    "pep257-oneline-blank": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 2,
+        "keyword (BM25)": 2,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 2,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.5574
+    },
+    "pep405-config-file": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 2,
+        "keyword (BM25)": 3,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.5227
+    },
+    "pep405-system-site": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4635
+    },
+    "pep405-base-prefix": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 3,
+        "keyword (BM25)": 2,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 2,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4592
+    },
+    "pep498-backslash": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.5574
+    },
+    "pep498-conversions": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 2,
+        "keyword (BM25)": 1,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 2,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4363
+    },
+    "pep498-runtime": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4345
+    },
+    "pep498-motivation": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4487
+    },
+    "pep518-why-toml": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 2,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 2
+      },
+      "shipped_top_score": 0.548
+    },
+    "pep518-setup-requires": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 2,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.3583
+    },
+    "pep518-tool-table": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 5,
+        "vector": 1,
+        "keyword (BM25)": null,
+        "hybrid": 7,
+        "hybrid + lexical rerank": 5,
+        "hybrid + cross-encoder": 8
+      },
+      "shipped_top_score": 0.4793
+    },
+    "pep572-syntax": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.4866
+    },
+    "pep572-toplevel": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.5574
+    },
+    "pep572-while-read": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.4098
+    },
+    "pep572-comprehension": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": null,
+        "keyword (BM25)": 1,
+        "hybrid": 7,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.5564
+    },
+    "pep621-name": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 3,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": 3,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.5571
+    },
+    "pep621-dynamic": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 3,
+        "vector": 2,
+        "keyword (BM25)": 3,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 3,
+        "hybrid + cross-encoder": 3
+      },
+      "shipped_top_score": 0.3521
+    },
+    "pep621-requires-python": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": 1,
+        "keyword (BM25)": null,
+        "hybrid": 4,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.3877
+    },
+    "pep636-wildcard": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 10,
+        "vector": 10,
+        "keyword (BM25)": 8,
+        "hybrid": 9,
+        "hybrid + lexical rerank": 9,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.5401
+    },
+    "pep636-guard": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 5,
+        "keyword (BM25)": 2,
+        "hybrid": 4,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 3
+      },
+      "shipped_top_score": 0.5525
+    },
+    "pep636-or-pattern": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 1,
+        "keyword (BM25)": 1,
+        "hybrid": 1,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 2
+      },
+      "shipped_top_score": 0.2876
+    },
+    "pep3107-attribute": {
+      "style": "paraphrase",
+      "rank": {
+        "legacy (in-memory)": 2,
+        "vector": 2,
+        "keyword (BM25)": 2,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 2,
+        "hybrid + cross-encoder": 1
+      },
+      "shipped_top_score": 0.469
+    },
+    "pep3107-lambda": {
+      "style": "lexical",
+      "rank": {
+        "legacy (in-memory)": 1,
+        "vector": 2,
+        "keyword (BM25)": 1,
+        "hybrid": 2,
+        "hybrid + lexical rerank": 1,
+        "hybrid + cross-encoder": 2
+      },
+      "shipped_top_score": 0.3758
+    },
+    "na-gil": {
+      "style": "unanswerable",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.2775
+    },
+    "na-django": {
+      "style": "unanswerable",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.1056
+    },
+    "na-asyncio-timeout": {
+      "style": "unanswerable",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.2583
+    },
+    "na-refund": {
+      "style": "unanswerable",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.2561
+    },
+    "na-numpy": {
+      "style": "unanswerable",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.1315
+    },
+    "na-weather": {
+      "style": "unanswerable",
+      "rank": {
+        "legacy (in-memory)": null,
+        "vector": null,
+        "keyword (BM25)": null,
+        "hybrid": null,
+        "hybrid + lexical rerank": null,
+        "hybrid + cross-encoder": null
+      },
+      "shipped_top_score": 0.1907
+    }
+  }
+}
