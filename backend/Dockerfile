@@ -10,6 +10,11 @@ COPY scripts ./scripts
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -e .
 
+# Bake the local embedding model into the image so the first upload/query does
+# not stall on a ~130 MB download. Override with EMBEDDING_MODEL at runtime.
+ENV MODEL_CACHE_DIR=/app/.cache/models
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/app/.cache/models')"
+
 RUN mkdir -p /app/storage
 
 EXPOSE 8000

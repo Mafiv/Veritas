@@ -1,6 +1,12 @@
-"""Pytest fixtures — use in-memory SQLite for API tests when needed."""
+"""Shared pytest configuration."""
 
-import pytest
+import os
+
+# Unit tests must never download models or call providers.
+os.environ.setdefault("EMBEDDING_PROVIDER", "mock")
+os.environ.setdefault("USE_MOCK_LLM", "true")
+
+import pytest  # noqa: E402
 
 
 @pytest.fixture

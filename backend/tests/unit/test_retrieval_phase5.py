@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from app.services.retrieval.pgvector import describe_vector_strategy, pgvector_enabled
+from app.services.retrieval.pgvector import describe_vector_strategy
 from app.services.retrieval.reranker import CrossEncoderReranker, LexicalReranker
 
 
 def test_pgvector_describe():
     info = describe_vector_strategy()
-    assert "storage" in info
-    assert info["storage"] == "json_on_document_chunks"
-    assert isinstance(pgvector_enabled(), bool)
+    assert info["vector_store"] == "postgres/pgvector"
+    assert info["embedding_dimensions"] == 384
 
 
 def test_lexical_reranker_empty():
