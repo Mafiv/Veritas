@@ -23,3 +23,6 @@ backend/storage/
 *.sqlite3
 .turbo/
 coverage/
+
+# Claude Code local state (worktrees, settings)
+.claude/
