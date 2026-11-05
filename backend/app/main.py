@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1 import api_router
 from app.core.config import get_settings
 from app.core.exceptions import VeritasError, error_payload
-from app.db.session import Base, engine
+from app.db.session import engine
 from app.models import domain  # noqa: F401 — register models
 from app.models.schemas import HealthResponse
 from app.services.monitoring.logger import get_logger, setup_logging
@@ -24,9 +24,7 @@ async def lifespan(app: FastAPI):
     log = get_logger()
     log.info("veritas.startup", env=settings.app_env, mock_llm=settings.use_mock_llm)
 
-    # Auto-create tables for development (Alembic for production)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Schema is owned by Alembic (`alembic upgrade head`); never create_all here.
 
     yield
     await engine.dispose()

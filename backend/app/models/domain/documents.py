@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -134,6 +135,12 @@ class DocumentVersion(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("document_id", "version_number", name="uq_document_version_number"),
         Index("ix_document_versions_document_id", "document_id"),
+        Index(
+            "uq_document_versions_one_active",
+            "document_id",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
@@ -375,6 +382,7 @@ class IngestionJob(Base, TimestampMixin):
 
     __tablename__ = "ingestion_jobs"
     __table_args__ = (
+        Index("ix_ingestion_jobs_document_id", "document_id"),
         Index("ix_ingestion_jobs_document_status", "document_id", "status"),
         Index("ix_ingestion_jobs_workspace_created", "workspace_id", "created_at"),
     )
